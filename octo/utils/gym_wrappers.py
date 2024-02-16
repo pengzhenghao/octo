@@ -43,6 +43,23 @@ def space_stack(space: gym.Space, repeat: int):
             {k: space_stack(v, repeat) for k, v in space.spaces.items()}
         )
     else:
+
+        # PZH: Support gymnasium
+        import gymnasium
+        if isinstance(space, gymnasium.spaces.Box):
+            return gym.spaces.Box(
+                low=np.repeat(space.low[None], repeat, axis=0),
+                high=np.repeat(space.high[None], repeat, axis=0),
+                dtype=space.dtype,
+            )
+        elif isinstance(space, gymnasium.spaces.Discrete):
+            return gym.spaces.MultiDiscrete([space.n] * repeat)
+        elif isinstance(space, gymnasium.spaces.Dict):
+            return gym.spaces.Dict(
+                {k: space_stack(v, repeat) for k, v in space.spaces.items()}
+            )
+
+
         raise ValueError(f"Space {space} is not supported by Octo Gym wrappers.")
 
 
