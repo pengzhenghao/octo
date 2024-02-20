@@ -14,6 +14,7 @@ from pvp.sb3.ppo.policies import ActorCriticPolicy
 if __name__ == '__main__':
 
     REPO_ROOT = Path(__file__).parent.parent.resolve()
+    DATASET_ROOT = Path(__file__).parent.resolve()
 
     N_TRAIN_EPISODES = 200
     N_VAL_EPISODES = 200
@@ -24,7 +25,7 @@ if __name__ == '__main__':
         use_render=False,  # Open the interface
         manual_control=False,  # Allow receiving control signal from external device
         # controller=control_device,
-        # window_size=(1600, 1100),
+        window_size=(200, 200),
         horizon=1500,
 
         # num_scenarios=1,
@@ -87,10 +88,10 @@ if __name__ == '__main__':
     def create_fake_episode(path, env, ep_count):
         episode = []
 
-        cfg = env.config.copy()
-        cfg["stack_size"] = 1
+        # cfg = env.config.copy()
+        # cfg["stack_size"] = 1
 
-        img_obs = ImageObservation(cfg, image_source="rgb_camera", clip_rgb=False)
+        # img_obs = ImageObservation(cfg, image_source="rgb_camera", clip_rgb=False)
 
         observations = env.reset()
         env.engine.force_fps.disable()
@@ -102,7 +103,14 @@ if __name__ == '__main__':
             actions, states = model.predict(
                 observations, state=states, episode_start=None, deterministic=deterministic
             )
-            image = img_obs.observe()[..., [2, 1, 0], 0]
+
+            image = env.engine.get_sensor("rgb_camera").perceive(clip=False)
+            image = image[..., [2, 1, 0]]
+
+            # import matplotlib.pyplot as plt
+            # plt.imshow(image)
+            # plt.show()
+
             new_observations, rewards, dones, infos = env.step(actions)
             episode.append({
                 'image': np.asarray(image, dtype=np.uint8),
@@ -119,9 +127,12 @@ if __name__ == '__main__':
             step += 1
 
         path = Path(path) / "episode_{}.pkl".format(ep_count)
+        path = path.resolve()
         save_to_pkl(path=path, obj=episode)
+        print("File saved at: ", path)
 
-        return infos["arrive_dest"], infos["episode_reward"], infos["episode_length"]
+        # return 0, 0, 0
+        return float(infos["arrive_dest"]), float(infos["episode_reward"]), float(infos["episode_length"])
 
 
     # create fake episodes for train and validation
@@ -129,24 +140,19 @@ if __name__ == '__main__':
     # os.makedirs('data/train', exist_ok=True)
     succl, rel, lel = [], [], []
     for ep_count in tqdm.tqdm(range(N_TRAIN_EPISODES)):
-        succ, rew, le = create_fake_episode(f'data/metadrive/train/', env=env, ep_count=ep_count)
+        succ, rew, le = create_fake_episode(DATASET_ROOT / f'data/train/', env=env, ep_count=ep_count)
         succl.append(succ)
         rel.append(rew)
         lel.append(le)
     print(f"TRAIN Success {np.mean(succl)}, Reward {np.mean(rel)}, Length {np.mean(lel)}")
     env.close()
 
-    eval_env_config = dict(
-        use_render=False,  # Open the interface
-        manual_control=False,  # Allow receiving control signal from external device
-        start_seed=1000,
-        horizon=1500,
-    )
+    train_env_config["start_seed"] = 1000
 
 
     def _make_eval_env():
         from pvp.experiments.metadrive.human_in_the_loop_env import HumanInTheLoopEnv
-        eval_env = HumanInTheLoopEnv(config=eval_env_config)
+        eval_env = HumanInTheLoopEnv(config=train_env_config)
         # eval_env = Monitor(env=eval_env, filename=str(trial_dir))
         return eval_env
 
@@ -154,7 +160,7 @@ if __name__ == '__main__':
     env = _make_eval_env()
     succl, rel, lel = [], [], []
     for ep_count in tqdm.tqdm(range(N_VAL_EPISODES)):
-        succ, rew, le = create_fake_episode(f'data/metadrive/eval/', env=env, ep_count=ep_count)
+        succ, rew, le = create_fake_episode(DATASET_ROOT / f'data/eval/', env=env, ep_count=ep_count)
         succl.append(succ)
         rel.append(rew)
         lel.append(le)
