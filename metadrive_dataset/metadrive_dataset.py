@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_datasets as tfds
 import tensorflow_hub as hub
-
+from pvp.sb3.common.save_util import load_from_pkl
 
 class ExampleDataset(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for example dataset."""
@@ -17,7 +17,7 @@ class ExampleDataset(tfds.core.GeneratorBasedBuilder):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # self._embed = hub.load("https://tfhub.dev/google/universal-sentence-encoder-large/5")
+        self._embed = hub.load("https://tfhub.dev/google/universal-sentence-encoder-large/5")
 
     def _info(self) -> tfds.core.DatasetInfo:
         """Dataset metadata (homepage, citation,...)."""
@@ -38,16 +38,16 @@ class ExampleDataset(tfds.core.GeneratorBasedBuilder):
                         #     doc='Wrist camera RGB observation.',
                         # ),
                         'state': tfds.features.Tensor(
-                            shape=(10,),
+                            shape=(259,),
                             dtype=np.float32,
-                            doc='Robot state, consists of [7x robot joint angles, '
+                            doc='(wrong:) Robot state, consists of [7x robot joint angles, '
                                 '2x gripper position, 1x door opening angle].',
                         )
                     }),
                     'action': tfds.features.Tensor(
-                        shape=(10,),
+                        shape=(2,),
                         dtype=np.float32,
-                        doc='Robot action, consists of [7x joint velocities, '
+                        doc='(wrong:) Robot action, consists of [7x joint velocities, '
                             '2x gripper velocities, 1x terminate episode].',
                     ),
                     'discount': tfds.features.Scalar(
@@ -97,49 +97,12 @@ class ExampleDataset(tfds.core.GeneratorBasedBuilder):
     def _generate_examples(self, path) -> Iterator[Tuple[str, Any]]:
         """Generator of examples for each split."""
 
-        def _parse_example(episode_path):
-            # load raw data --> this should change for your dataset
-            data = np.load(episode_path, allow_pickle=True)     # this is a list of dicts in our case
-
-            # assemble episode --> here we're assuming demos so we set reward to 1 at the end
-            episode = []
-            for i, step in enumerate(data):
-                # compute Kona language embedding
-                language_embedding = self._embed([step['language_instruction']])[0].numpy()
-
-                episode.append({
-                    'observation': {
-                        'image': step['image'],
-                        'wrist_image': step['wrist_image'],
-                        'state': step['state'],
-                    },
-                    'action': step['action'],
-                    'discount': 1.0,
-                    'reward': float(i == (len(data) - 1)),
-                    'is_first': i == 0,
-                    'is_last': i == (len(data) - 1),
-                    'is_terminal': i == (len(data) - 1),
-                    'language_instruction': step['language_instruction'],
-                    'language_embedding': language_embedding,
-                })
-
-            # create output data sample
-            sample = {
-                'steps': episode,
-                'episode_metadata': {
-                    'file_path': episode_path
-                }
-            }
-
-            # if you want to skip an example for whatever reason, simply return None
-            return episode_path, sample
-
         # create list of all examples
         episode_paths = glob.glob(path)
 
         # for smallish datasets, use single-thread parsing
         for sample in episode_paths:
-            yield _parse_example(sample)
+            yield _parse_example(sample, embed=self._embed)
 
         # for large datasets use beam to parallelize data parsing (this will have initialization overhead)
         # beam = tfds.core.lazy_imports.apache_beam
@@ -148,3 +111,48 @@ class ExampleDataset(tfds.core.GeneratorBasedBuilder):
         #         | beam.Map(_parse_example)
         # )
 
+
+def _parse_example(episode_path, embed):
+    # load raw data --> this should change for your dataset
+    # data = np.load(episode_path, allow_pickle=True)     # this is a list of dicts in our case
+    data = load_from_pkl(episode_path)
+
+    # assemble episode --> here we're assuming demos so we set reward to 1 at the end
+    episode = []
+    for i, step in enumerate(data):
+        # compute Kona language embedding
+        language_embedding = embed([step['language_instruction']])[0].numpy()
+
+        episode.append({
+            'observation': {
+                'image': step['image'],
+                # 'wrist_image': step['wrist_image'],
+                'state': step['state'],
+            },
+            'action': step['action'],
+            'discount': 1.0,
+            'reward': float(i == (len(data) - 1)),
+            'is_first': i == 0,
+            'is_last': i == (len(data) - 1),
+            'is_terminal': i == (len(data) - 1),
+            'language_instruction': step['language_instruction'],
+            'language_embedding': language_embedding,
+        })
+
+    # create output data sample
+    sample = {
+        'steps': episode,
+        'episode_metadata': {
+            'file_path': episode_path
+        }
+    }
+
+    # if you want to skip an example for whatever reason, simply return None
+    return episode_path, sample
+
+
+if __name__ == '__main__':
+    # test
+    embed = hub.load("https://tfhub.dev/google/universal-sentence-encoder-large/5")
+    ret = _parse_example("data/train/episode_0", embed)
+    print(1)
