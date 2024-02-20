@@ -30,14 +30,24 @@ dataset and accessible compute budgets.
 
 ## Installation
 ```bash
-conda create -n octo python=3.10
-conda activate octo
+conda create -n pvpocto python=3.10
+conda activate pvpocto
 pip install -e .
 pip install -r requirements.txt
+
+cd ~/metadrive
+pip install -e .
+
+
+# For PVP:
+pip install torch
+python -c "import torch;print(torch.cuda.is_available())"
+
+
 ```
 For GPU:
 ```bash
-pip install --upgrade "jax[cuda11_pip]==0.4.20" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+pip install --upgrade "jax[cuda12_pip]==0.4.20" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 ```
 
 For TPU
