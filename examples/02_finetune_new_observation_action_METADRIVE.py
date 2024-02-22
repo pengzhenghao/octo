@@ -13,10 +13,11 @@ import optax
 import tensorflow as tf
 import tqdm
 import wandb
+import pathlib
 
 from octo.data.dataset import make_single_dataset
 from octo.data.utils.data_utils import NormalizationType
-from octo.model.components.action_heads import L1ActionHead
+from octo.model.components.action_heads import L1ActionHead, DiffusionActionHead
 from octo.model.components.tokenizers import LowdimObsTokenizer
 from octo.model.octo_model import OctoModel
 from octo.utils.jax_utils import initialize_compilation_cache
@@ -31,11 +32,11 @@ from octo.utils.train_utils import (
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string(
-    "pretrained_path", None, "Path to pre-trained Octo checkpoint directory."
+    "pretrained_path", "hf://rail-berkeley/octo-small", "Path to pre-trained Octo checkpoint directory."
 )
-flags.DEFINE_string("data_dir", None, "Path to finetuning dataset, in RLDS format.")
+flags.DEFINE_string("data_dir", "metadrive_dataset", "Path to finetuning dataset, in RLDS format.")
 flags.DEFINE_string("save_dir", None, "Directory for saving finetuning checkpoints.")
-flags.DEFINE_integer("batch_size", 128, "Batch size for finetuning.")
+flags.DEFINE_integer("batch_size", 4, "Batch size for finetuning.")
 
 flags.DEFINE_bool(
     "freeze_transformer",
@@ -45,6 +46,11 @@ flags.DEFINE_bool(
 
 
 def main(_):
+
+    # PZH
+    # Verify if GPU can be used.
+    print("DEVICES: ", jax.devices("gpu"))
+
     assert (
         FLAGS.batch_size % jax.device_count() == 0
     ), "Batch size must be divisible by device count."
@@ -54,11 +60,24 @@ def main(_):
     tf.config.set_visible_devices([], "GPU")
 
     # setup wandb for logging
-    wandb.init(name="finetune_aloha", project="octo")
+    # wandb.init(name="finetune_metadrive", project="octo")
 
-    # load pre-trained model
-    logging.info("Loading pre-trained model...")
-    pretrained_model = OctoModel.load_pretrained(FLAGS.pretrained_path)
+
+    # PZH
+    ACTION_DIM = 2
+
+    import importlib
+    # dataset_name = args.dataset_name
+
+    data_dir = "metadrive_dataset" #/ "metadrive_dataset" / "1.0.0"
+    module = importlib.import_module(data_dir)
+
+    data_dir = pathlib.Path("/home/zhenghao/octo") / "metadrive_dataset"
+
+
+    # print(f"Visualizing data from dataset: {data_dir}")
+
+
 
     # make finetuning dataset
     # apply Gaussian normalization, load chunks of 50 actions since we'll train with action chunking
@@ -67,30 +86,66 @@ def main(_):
     logging.info("Loading finetuning dataset...")
     dataset = make_single_dataset(
         dataset_kwargs=dict(
-            name="aloha_sim_cube_scripted_dataset",
-            data_dir=FLAGS.data_dir,
-            image_obs_keys={"primary": "top"},
+
+            # PZH
+            name="metadrive_dataset",
+
+            data_dir=data_dir,
+            split_suffix="[:5%]",
+
+            # PZH
+            # image_obs_keys={"primary": "top"},
+            image_obs_keys={"primary": "image"},
+
             state_obs_keys=["state"],
             language_key="language_instruction",
             action_proprio_normalization_type=NormalizationType.NORMAL,
-            absolute_action_mask=[True] * 14,
+
+            # PZH
+            absolute_action_mask=[True] * ACTION_DIM,
+
         ),
         traj_transform_kwargs=dict(
-            window_size=1,
-            future_action_window_size=49,  # so we get 50 actions for our action chunk
+
+
+            # PZH
+            # window_size=1,
+            window_size=5,
+
+            # PZH
+            # future_action_window_size=49,  # so we get 50 actions for our action chunk
+            future_action_window_size=5,
+
         ),
         frame_transform_kwargs=dict(
             resize_size={"primary": (256, 256)},
         ),
         train=True,
     )
+
+    # PZH
     train_data_iter = (
         dataset.repeat()
         .unbatch()
-        .shuffle(10000)  # can reduce this if RAM consumption too high
+        .shuffle(200)  # can reduce this if RAM consumption too high
         .batch(FLAGS.batch_size)
         .iterator()
     )
+    # train_data_iter = (
+    #     dataset.repeat()
+    #     .unbatch()
+    #     .shuffle(1)  # can reduce this if RAM consumption too high
+    #     .batch(1)
+    #     .iterator()
+    # )
+
+
+
+    # load pre-trained model
+    logging.info("Loading pre-trained model...")
+    pretrained_model = OctoModel.load_pretrained(FLAGS.pretrained_path)
+
+
 
     # run text tokenizer over batch (this needs to happen before training / sharding) + delete unused keys
     text_processor = pretrained_model.text_processor
@@ -118,9 +173,17 @@ def main(_):
     )
     # Fully override the old action head with a new one (for smaller changes, you can use update_module_config)
     config["model"]["heads"]["action"] = ModuleSpec.create(
+
+        # TODO: Use diffusion here?
         L1ActionHead,
-        pred_horizon=50,
-        action_dim=14,
+        # DiffusionActionHead,
+
+        # TODO: ??
+        pred_horizon=5,
+
+        # PZH
+        action_dim=ACTION_DIM,
+
         readout_key="readout_action",
     )
 

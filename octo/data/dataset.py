@@ -214,6 +214,9 @@ def make_dataset_from_rlds(
     action_normalization_mask: Optional[Sequence[bool]] = None,
     num_parallel_reads: int = tf.data.AUTOTUNE,
     num_parallel_calls: int = tf.data.AUTOTUNE,
+
+    # PZH
+    split_suffix=None,
 ) -> Tuple[dl.DLataset, dict]:
     """This function is responsible for loading a specific RLDS dataset from storage and getting it into a
     standardized format. Yields a dataset of trajectories. Does not include CPU-intensive operations.
@@ -400,6 +403,9 @@ def make_dataset_from_rlds(
         split = "train[:95%]" if train else "train[95%:]"
     else:
         split = "train" if train else "val"
+
+    if split_suffix is not None:
+        split = split + split_suffix
 
     dataset = dl.DLataset.from_rlds(
         builder, split=split, shuffle=shuffle, num_parallel_reads=num_parallel_reads

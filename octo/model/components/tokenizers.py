@@ -121,7 +121,11 @@ class ImageTokenizer(nn.Module):
             for k in needed_task_keys:
                 if k not in tasks:
                     logging.info(
-                        f"No task inputs matching {k} were found. Replacing with zero padding."
+
+                        # PZH
+                        # f"No task inputs matching {k} were found. Replacing with zero padding."
+                        f"No task inputs (goal) matching {k} were found. Replacing with zero padding."
+
                     )
                     tasks = flax.core.copy(
                         tasks, {k: jnp.zeros_like(observations[k][:, 0])}
