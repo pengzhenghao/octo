@@ -24,8 +24,8 @@ import numpy as np
 import wandb
 
 # sys.path.append("path/to/your/act")
-#
-# from envs.aloha_sim_env import AlohaGymEnv  # keep this to register ALOHA sim env
+
+from envs.aloha_sim_env import AlohaGymEnv  # keep this to register ALOHA sim env
 
 from octo.model.octo_model import OctoModel
 from octo.utils.gym_wrappers import HistoryWrapper, RHCWrapper, UnnormalizeActionProprio, ResizeImageWrapper
@@ -33,15 +33,13 @@ from gym import ObservationWrapper
 
 FLAGS = flags.FLAGS
 
-# flags.DEFINE_string(
-#     "finetuned_path", None, "Path to finetuned Octo checkpoint directory."
-# )
-
+flags.DEFINE_string(
+    "finetuned_path", None, "Path to finetuned Octo checkpoint directory."
+)
 
 class MetaDriveObsWrapper(ObservationWrapper):
     def observation(self, observation):
         return {"image_primary": observation["image"]}
-
 
 def main(_):
     # setup wandb for logging
@@ -49,72 +47,7 @@ def main(_):
 
     # load finetuned model
     logging.info("Loading finetuned model...")
-    # model = OctoModel.load_pretrained(FLAGS.finetuned_path)
-    model = OctoModel.load_pretrained("hf://rail-berkeley/octo-small")
-
-
-    # PZH: Playwith the model
-    from octo.model.components.action_heads import L1ActionHead
-    from octo.model.components.tokenizers import LowdimObsTokenizer
-    from octo.utils.spec import ModuleSpec
-    from octo.utils.train_utils import (
-        freeze_weights,
-        merge_params,
-        process_text,
-        TrainState,
-    )
-
-    # load pre-training config and modify --> remove wrist cam, add proprio input, change action head
-    # following Zhao et al. we use "action chunks" of length 50 and L1 loss for ALOHA
-    # pretrained_model = model
-    # config = pretrained_model.config
-    # del config["model"]["observation_tokenizers"]["wrist"]
-    # ###
-    # config["model"]["observation_tokenizers"]["proprio"] = ModuleSpec.create(
-    #     LowdimObsTokenizer,
-    #     n_bins=256,
-    #     bin_type="normal",
-    #     # low=-2.0,
-    #     # high=2.0,
-    #
-    #     # PZH: In metadrive they are [0, 1]
-    #     low=0.0,
-    #     high=1.0,
-    #
-    #     obs_keys=["proprio"],
-    # )
-    # # Fully override the old action head with a new one (for smaller changes, you can use update_module_config)
-    # config["model"]["heads"]["action"] = ModuleSpec.create(
-    #     L1ActionHead,
-    #     pred_horizon=50,
-    #
-    #     # PZH: In metadrive it's 2dim.
-    #     # action_dim=14,
-    #     action_dim=2,
-    #
-    #     readout_key="readout_action",
-    # )
-    #
-    # # initialize weights for modified Octo model, then merge in all applicable pre-trained weights
-    # # new position encodings for proprio inputs & weights for new action head will remain "from scratch"
-    # logging.info("Updating model for new observation & action space...")
-    #
-    # model = OctoModel.from_config(
-    #     config,
-    #     example_batch,
-    #     text_processor=pretrained_model.text_processor,
-    #     verbose=True,
-    #     dataset_statistics=dataset.dataset_statistics,
-    # )
-    # merged_params = merge_params(model.params, pretrained_model.params)
-    # # can perform any additional parameter surgery here...
-    # # ...
-    # model = model.replace(params=merged_params)
-    # del pretrained_model
-
-
-
-
+    model = OctoModel.load_pretrained(FLAGS.finetuned_path)
 
     # make gym environment
     ##################################################################################################################
@@ -172,14 +105,15 @@ def main(_):
 
     # add wrappers for history and "receding horizon control", i.e. action chunking
     env = HistoryWrapper(env, horizon=1)
-    # env = RHCWrapper(env, exec_horizon=50)
-    env = RHCWrapper(env, exec_horizon=1)
+    env = RHCWrapper(env, exec_horizon=50)
+
+    # TODO Which order?
     env = ResizeImageWrapper(env, resize_size=(256, 256))
 
     # wrap env to handle action/proprio normalization -- match normalization type to the one used during finetuning
-    # env = UnnormalizeActionProprio(
-    #     env, model.dataset_statistics, normalization_type="normal"
-    # )
+    env = UnnormalizeActionProprio(
+        env, model.dataset_statistics, normalization_type="normal"
+    )
 
     # running rollouts
     for _ in range(3):
@@ -192,8 +126,9 @@ def main(_):
 
         # run rollout for 400 steps
         images = [obs["image_primary"]]
+
         episode_return = 0.0
-        while len(images) < 50:
+        while len(images) < 400:
             # model returns actions of shape [batch, pred_horizon, action_dim] -- remove batch
             actions = model.sample_actions(
                 jax.tree_map(lambda x: x[None], obs), task, rng=jax.random.PRNGKey(0)
@@ -203,7 +138,11 @@ def main(_):
             # step env -- info contains full "chunk" of observations for logging
             # obs only contains observation for final step of chunk
             obs, reward, done, trunc, info = env.step(actions)
+
+            # PZH
             images.extend([obs["image_primary"]])
+            # images.extend([o["image_primary"][0] for o in info["observations"]])
+
             episode_return += reward
             if done or trunc:
                 break
