@@ -37,6 +37,7 @@ flags.DEFINE_string(
 flags.DEFINE_string("data_dir", "metadrive_dataset", "Path to finetuning dataset, in RLDS format.")
 flags.DEFINE_string("save_dir", "tests/", "Directory for saving finetuning checkpoints.")
 flags.DEFINE_integer("batch_size", 4, "Batch size for finetuning.")
+flags.DEFINE_integer("total_steps", 5000, "total steps.", short_name="total_step")
 
 flags.DEFINE_bool(
     "freeze_transformer",
@@ -259,8 +260,9 @@ def main(_):
         return new_state, info
 
     # run finetuning loop
+    total_steps = FLAGS.total_steps
     logging.info("Starting finetuning...")
-    for i in tqdm.tqdm(range(5000), total=5000, dynamic_ncols=True):
+    for i in tqdm.tqdm(range(total_steps), total=total_steps, dynamic_ncols=True):
         batch = next(train_data_iter)
         train_state, update_info = train_step(train_state, batch)
         if (i + 1) % 100 == 0:
@@ -269,7 +271,7 @@ def main(_):
                 flax.traverse_util.flatten_dict({"training": update_info}, sep="/"),
                 step=i,
             )
-        if (i + 1) % 1000 == 0:
+        if (i % 1000 == 0 and i > 0) or (i == total_steps):
             # save checkpoint
             train_state.model.save_pretrained(step=i, checkpoint_path=save_dir)
 
