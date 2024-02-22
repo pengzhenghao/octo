@@ -188,8 +188,8 @@ def main(_):
     config["model"]["heads"]["action"] = ModuleSpec.create(
 
         # TODO: Use diffusion here?
-        L1ActionHead,
-        # DiffusionActionHead,
+        # L1ActionHead,
+        DiffusionActionHead,
 
         # TODO: ??
         pred_horizon=5,
