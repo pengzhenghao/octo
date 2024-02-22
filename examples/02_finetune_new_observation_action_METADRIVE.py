@@ -35,7 +35,7 @@ flags.DEFINE_string(
     "pretrained_path", "hf://rail-berkeley/octo-small", "Path to pre-trained Octo checkpoint directory."
 )
 flags.DEFINE_string("data_dir", "metadrive_dataset", "Path to finetuning dataset, in RLDS format.")
-flags.DEFINE_string("save_dir", None, "Directory for saving finetuning checkpoints.")
+flags.DEFINE_string("save_dir", "tests/", "Directory for saving finetuning checkpoints.")
 flags.DEFINE_integer("batch_size", 4, "Batch size for finetuning.")
 
 flags.DEFINE_bool(
@@ -50,7 +50,7 @@ flags.DEFINE_bool(
     "Whether wandb",
 )
 
-
+REPO_ROOT = pathlib.Path(__file__).parent.parent.resolve()
 
 def main(_):
 
@@ -84,6 +84,8 @@ def main(_):
     module = importlib.import_module(data_dir)
 
     data_dir = pathlib.Path("/home/zhenghao/octo") / "metadrive_dataset"
+
+    save_dir = REPO_ROOT / FLAGS.save_dir
 
 
     # print(f"Visualizing data from dataset: {data_dir}")
@@ -269,7 +271,7 @@ def main(_):
             )
         if (i + 1) % 1000 == 0:
             # save checkpoint
-            train_state.model.save_pretrained(step=i, checkpoint_path=FLAGS.save_dir)
+            train_state.model.save_pretrained(step=i, checkpoint_path=save_dir)
 
 
 if __name__ == "__main__":
