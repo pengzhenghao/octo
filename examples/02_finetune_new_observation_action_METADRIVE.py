@@ -44,6 +44,13 @@ flags.DEFINE_bool(
     "Whether pre-trained transformer weights should be frozen.",
 )
 
+flags.DEFINE_bool(
+    "wandb",
+    False,
+    "Whether wandb",
+)
+
+
 
 def main(_):
 
@@ -60,7 +67,11 @@ def main(_):
     tf.config.set_visible_devices([], "GPU")
 
     # setup wandb for logging
-    # wandb.init(name="finetune_metadrive", project="octo")
+    if not FLAGS.wandb:
+        import os
+        os.environ["WANDB_MODE"] = "offline"
+
+    wandb.init(name="finetune_metadrive", project="octo")
 
 
     # PZH
