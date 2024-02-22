@@ -35,7 +35,7 @@ flags.DEFINE_string(
     "pretrained_path", "hf://rail-berkeley/octo-small", "Path to pre-trained Octo checkpoint directory."
 )
 flags.DEFINE_string("data_dir", "metadrive_dataset", "Path to finetuning dataset, in RLDS format.")
-flags.DEFINE_string("save_dir", "models/", "Directory for saving finetuning checkpoints.")
+flags.DEFINE_string("save_dir", "/data/zhenghao/octo/models/", "Directory for saving finetuning checkpoints.")
 flags.DEFINE_integer("batch_size", 3, "Batch size for finetuning.")
 flags.DEFINE_integer("total_steps", 5000, "total steps.", short_name="total_step")
 
@@ -87,7 +87,6 @@ def main(_):
     data_dir = pathlib.Path("/home/zhenghao/octo") / "metadrive_dataset"
 
     save_dir = REPO_ROOT / FLAGS.save_dir
-
 
     # print(f"Visualizing data from dataset: {data_dir}")
 
