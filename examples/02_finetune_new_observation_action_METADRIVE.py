@@ -51,6 +51,12 @@ flags.DEFINE_bool(
     "Whether wandb",
 )
 
+flags.DEFINE_string(
+    "exp_name",
+    "finetune_metadrive",
+    "name",
+)
+
 REPO_ROOT = pathlib.Path(__file__).parent.parent.resolve()
 
 def main(_):
@@ -83,10 +89,21 @@ def main(_):
 
     data_dir = "metadrive_dataset" #/ "metadrive_dataset" / "1.0.0"
     module = importlib.import_module(data_dir)
+    print(f"{module} is loaded.")
 
     data_dir = pathlib.Path("/home/zhenghao/octo") / "metadrive_dataset"
 
     save_dir = REPO_ROOT / FLAGS.save_dir
+
+    def get_time_str():
+        import datetime
+        return datetime.datetime.now().strftime("%Y-%m-%d_%H%M")
+
+    exp_name = FLAGS.exp_name
+    trial_id = get_time_str()
+    name = "{}_{}".format(exp_name, trial_id)
+    save_dir = save_dir / name
+    save_dir.mkdir(exist_ok=True)
 
     # print(f"Visualizing data from dataset: {data_dir}")
 
