@@ -7,7 +7,8 @@ import tensorflow_datasets as tfds
 import tensorflow_hub as hub
 from pvp.sb3.common.save_util import load_from_pkl
 
-class ExampleDataset(tfds.core.GeneratorBasedBuilder):
+
+class MetadriveDataset(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for example dataset."""
 
     VERSION = tfds.core.Version('1.0.0')
@@ -26,7 +27,7 @@ class ExampleDataset(tfds.core.GeneratorBasedBuilder):
                 'steps': tfds.features.Dataset({
                     'observation': tfds.features.FeaturesDict({
                         'image': tfds.features.Image(
-                            shape=(256, 256, 3),
+                            shape=(256, 512, 3),
                             dtype=np.uint8,
                             encoding_format='png',
                             doc='Main camera RGB observation.',
@@ -91,7 +92,7 @@ class ExampleDataset(tfds.core.GeneratorBasedBuilder):
         """Define data splits."""
         return {
             'train': self._generate_examples(path='data/train/episode_*.pkl'),
-            'val': self._generate_examples(path='data/val/episode_*.pkl'),
+            'val': self._generate_examples(path='data/eval/episode_*.pkl'),
         }
 
     def _generate_examples(self, path) -> Iterator[Tuple[str, Any]]:
