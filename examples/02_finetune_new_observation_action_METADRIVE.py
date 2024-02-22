@@ -35,8 +35,8 @@ flags.DEFINE_string(
     "pretrained_path", "hf://rail-berkeley/octo-small", "Path to pre-trained Octo checkpoint directory."
 )
 flags.DEFINE_string("data_dir", "metadrive_dataset", "Path to finetuning dataset, in RLDS format.")
-flags.DEFINE_string("save_dir", "tests/", "Directory for saving finetuning checkpoints.")
-flags.DEFINE_integer("batch_size", 4, "Batch size for finetuning.")
+flags.DEFINE_string("save_dir", "models/", "Directory for saving finetuning checkpoints.")
+flags.DEFINE_integer("batch_size", 3, "Batch size for finetuning.")
 
 flags.DEFINE_bool(
     "freeze_transformer",

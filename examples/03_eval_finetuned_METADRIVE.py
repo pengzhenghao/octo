@@ -25,7 +25,7 @@ import wandb
 
 # sys.path.append("path/to/your/act")
 
-from envs.aloha_sim_env import AlohaGymEnv  # keep this to register ALOHA sim env
+# from envs.aloha_sim_env import AlohaGymEnv  # keep this to register ALOHA sim env
 
 from octo.model.octo_model import OctoModel
 from octo.utils.gym_wrappers import HistoryWrapper, RHCWrapper, UnnormalizeActionProprio, ResizeImageWrapper
@@ -34,7 +34,7 @@ from gym import ObservationWrapper
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string(
-    "finetuned_path", None, "Path to finetuned Octo checkpoint directory."
+    "finetuned_path", "/data/zhenghao/octo/finetuned_model_0222/", "Path to finetuned Octo checkpoint directory."
 )
 
 class MetaDriveObsWrapper(ObservationWrapper):
@@ -47,7 +47,11 @@ def main(_):
 
     # load finetuned model
     logging.info("Loading finetuned model...")
-    model = OctoModel.load_pretrained(FLAGS.finetuned_path)
+
+    finetuned_path = FLAGS.finetuned_path
+
+    finetuned_path = "/data/zhenghao/octo/finetuned_model_0222/"
+    model = OctoModel.load_pretrained(finetuned_path)
 
     # make gym environment
     ##################################################################################################################
