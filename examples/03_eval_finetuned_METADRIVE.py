@@ -202,9 +202,9 @@ def main(_):
         # log rollout video to wandb -- subsample temporally 2x for faster logging
     wandb.log(
         {
-            "rollout_video": wandb.Video(np.array(
-                [np.array(images).transpose(0, 3, 1, 2) for images in images_list]
-            ), fps=20)
+            "rollout_video": wandb.Video(
+                np.array([np.array(images).transpose(0, 3, 1, 2) for images in images_list]), fps=20
+            )
         },
         step=0
     )
