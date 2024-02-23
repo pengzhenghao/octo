@@ -271,6 +271,9 @@ class OctoModel:
         )
         step = step if step is not None else checkpointer.latest_step()
         params = checkpointer.restore(step, params_shape)
+        logging.info(
+            f"Model was restored at step {step} at path {checkpoint_path}."
+        )
 
         if config["text_processor"] is not None:
             text_processor = ModuleSpec.instantiate(config["text_processor"])()

@@ -35,7 +35,7 @@ from gym import ObservationWrapper
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string(
-    "finetuned_path", "/data/zhenghao/octo/models/finetune_metadrive_2024-02-22_1352", "Path to finetuned Octo checkpoint directory."
+    "finetuned_path", "/data/zhenghao/octo/models/finetune_metadrive_2024-02-22_2346", "Path to finetuned Octo checkpoint directory."
 )
 
 flags.DEFINE_bool(
@@ -46,7 +46,7 @@ flags.DEFINE_bool(
 
 flags.DEFINE_string(
     "exp_name",
-    "finetune_metadrive",
+    "eval_metadrive",
     "name",
 )
 
@@ -153,7 +153,7 @@ def main(_):
     )
 
     # running rollouts
-    for _ in range(5):
+    for _ in range(10):
         obs, info = env.reset()
 
         # create task specification --> use model utility to create task dict with correct entries
