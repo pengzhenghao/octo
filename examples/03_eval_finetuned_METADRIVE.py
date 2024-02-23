@@ -156,10 +156,9 @@ def main(_):
         task = model.create_tasks(texts=["Drive the ego vehicle to the destination."])
 
         # run rollout for 400 steps
-        images = [obs["image_primary"]]
+        images = [o for o in obs["image_primary"]]
 
         episode_return = 0.0
-
 
         # while len(images) < 100:
         horizon = 1000
