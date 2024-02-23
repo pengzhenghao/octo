@@ -104,7 +104,7 @@ if __name__ == '__main__':
                 observations, state=states, episode_start=None, deterministic=deterministic
             )
 
-            image = env.engine.get_sensor("rgb_camera").perceive(clip=False)
+            image = env.engine.get_sensor("rgb_camera").perceive(to_float=False)
             image = image[..., [2, 1, 0]]
 
             # import matplotlib.pyplot as plt

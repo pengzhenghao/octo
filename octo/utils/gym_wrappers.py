@@ -279,6 +279,7 @@ class UnnormalizeActionProprio(gym.ActionWrapper, gym.ObservationWrapper):
         env: gym.Env,
         action_proprio_metadata: dict,
         normalization_type: str,
+        key="proprio"
     ):
         self.action_proprio_metadata = jax.tree_map(
             lambda x: np.array(x),
@@ -287,6 +288,7 @@ class UnnormalizeActionProprio(gym.ActionWrapper, gym.ObservationWrapper):
         )
         self.normalization_type = normalization_type
         super().__init__(env)
+        self.key = key
 
     def unnormalize(self, data, metadata):
         mask = metadata.get("mask", np.ones_like(metadata["mean"], dtype=bool))
@@ -338,7 +340,5 @@ class UnnormalizeActionProprio(gym.ActionWrapper, gym.ObservationWrapper):
         return self.unnormalize(action, self.action_proprio_metadata["action"])
 
     def observation(self, obs):
-        obs["proprio"] = self.normalize(
-            obs["proprio"], self.action_proprio_metadata["proprio"]
-        )
+        obs[self.key] = self.normalize(obs[self.key], self.action_proprio_metadata[self.key])
         return obs

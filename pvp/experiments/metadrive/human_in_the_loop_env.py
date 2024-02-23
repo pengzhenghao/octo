@@ -36,7 +36,7 @@ HUMAN_IN_THE_LOOP_ENV_CONFIG = {
 }
 
 
-class HumanInTheLoopEnv(SafeMetaDriveEnv):
+class HumanInTheLoopEnv5TupleReturn(SafeMetaDriveEnv):
     """
     Human-in-the-loop Env Wrapper for the Safety Env in MetaDrive.
     Add code for computing takeover cost and add information to the interface.
@@ -51,20 +51,20 @@ class HumanInTheLoopEnv(SafeMetaDriveEnv):
     start_time = time.time()
 
     def default_config(self):
-        config = super(HumanInTheLoopEnv, self).default_config()
+        config = super(HumanInTheLoopEnv5TupleReturn, self).default_config()
         config.update(HUMAN_IN_THE_LOOP_ENV_CONFIG, allow_add_new_key=True)
         return config
 
     def reset(self, *args, **kwargs):
         self.takeover = False
         self.agent_action = None
-        obs, info = super(HumanInTheLoopEnv, self).reset(*args, **kwargs)
-        # The training code is for older version of gym, so we discard the additional info from the reset.
-        return obs
+        obs, info = super(HumanInTheLoopEnv5TupleReturn, self).reset(*args, **kwargs)
+        # WRONG: # The training code is for older version of gym, so we discard the additional info from the reset.
+        return obs, info
 
     def _get_step_return(self, actions, engine_info):
         """Compute takeover cost here."""
-        o, r, tm, tc, engine_info = super(HumanInTheLoopEnv, self)._get_step_return(actions, engine_info)
+        o, r, tm, tc, engine_info = super(HumanInTheLoopEnv5TupleReturn, self)._get_step_return(actions, engine_info)
         d = tm or tc
 
         shared_control_policy = self.engine.get_policy(self.agent.id)
@@ -84,7 +84,7 @@ class HumanInTheLoopEnv(SafeMetaDriveEnv):
         engine_info["total_native_cost"] = self.episode_cost
         self.total_cost += engine_info["cost"]
 
-        return o, r, d, engine_info
+        return o, r, tm, tc, engine_info
 
     def _is_out_of_road(self, vehicle):
         """Out of road condition"""
@@ -96,13 +96,13 @@ class HumanInTheLoopEnv(SafeMetaDriveEnv):
     def step(self, actions):
         """Add additional information to the interface."""
         self.agent_action = copy.copy(actions)
-        ret = super(HumanInTheLoopEnv, self).step(actions)
+        ret = super(HumanInTheLoopEnv5TupleReturn, self).step(actions)
         while self.in_pause:
             self.engine.taskMgr.step()
 
         self.takeover_recorder.append(self.takeover)
         if self.config["use_render"]:  # and self.config["main_exp"]: #and not self.config["in_replay"]:
-            super(HumanInTheLoopEnv, self).render(
+            super(HumanInTheLoopEnv5TupleReturn, self).render(
                 text={
                     "Total Cost": round(self.total_cost, 2),
                     "Takeover Cost": round(self.total_takeover_cost, 2),
@@ -124,7 +124,7 @@ class HumanInTheLoopEnv(SafeMetaDriveEnv):
 
     def setup_engine(self):
         """Introduce additional key 'e' to the interface."""
-        super(HumanInTheLoopEnv, self).setup_engine()
+        super(HumanInTheLoopEnv5TupleReturn, self).setup_engine()
         self.engine.accept("e", self.stop)
 
     def get_takeover_cost(self, info):
@@ -141,6 +141,15 @@ class HumanInTheLoopEnv(SafeMetaDriveEnv):
             cos_dist = multiplier / divident
         return 1 - cos_dist
 
+class HumanInTheLoopEnv(HumanInTheLoopEnv5TupleReturn):
+
+    def step(self, a):
+        o, r, d, t, i = super(HumanInTheLoopEnv, self).step(a)
+        return o, r, d, i
+
+    def reset(self, *args, **kwargs):
+        o, i = super(HumanInTheLoopEnv, self).reset(*args, **kwargs)
+        return o
 
 if __name__ == "__main__":
     env = HumanInTheLoopEnv({

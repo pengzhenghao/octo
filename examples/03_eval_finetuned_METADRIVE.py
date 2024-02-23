@@ -17,6 +17,7 @@ To run this script, run:
 """
 import sys
 
+import tqdm
 from absl import app, flags, logging
 import gym
 import jax
@@ -34,24 +35,46 @@ from gym import ObservationWrapper
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string(
-    "finetuned_path", "/data/zhenghao/octo/finetuned_model_0222/", "Path to finetuned Octo checkpoint directory."
+    "finetuned_path", "/data/zhenghao/octo/models/finetune_metadrive_2024-02-22_1352", "Path to finetuned Octo checkpoint directory."
+)
+
+flags.DEFINE_bool(
+    "wandb",
+    False,
+    "Whether wandb",
+)
+
+flags.DEFINE_string(
+    "exp_name",
+    "finetune_metadrive",
+    "name",
 )
 
 class MetaDriveObsWrapper(ObservationWrapper):
+    observation_space = gym.spaces.Dict(
+        {"image_primary": gym.spaces.Box(shape=(256, 512, 3), dtype=np.uint8, low=0, high=255),
+         "state": gym.spaces.Box(shape=(259,), dtype=np.float32, low=float("-inf"), high=float("+inf"))
+         }
+    )
     def observation(self, observation):
-        return {"image_primary": observation["image"]}
+        cam = self.env.engine.get_sensor("rgb_camera")
+        image = cam.perceive(to_float=False)
+        image = image[..., [2, 1, 0]]
+        return {"image_primary": image, "proprio":  observation}
+
+
+
 
 def main(_):
+
+    # setup wandb for logging
+    if not FLAGS.wandb:
+        import os
+        os.environ["WANDB_MODE"] = "offline"
+
     # setup wandb for logging
     wandb.init(name="eval_metadrive", project="octo")
 
-    # load finetuned model
-    logging.info("Loading finetuned model...")
-
-    finetuned_path = FLAGS.finetuned_path
-
-    finetuned_path = "/data/zhenghao/octo/finetuned_model_0222/"
-    model = OctoModel.load_pretrained(finetuned_path)
 
     # make gym environment
     ##################################################################################################################
@@ -75,44 +98,48 @@ def main(_):
     # PZH: Make env here
     from metadrive import MetaDriveEnv
     from metadrive.component.sensors.rgb_camera import RGBCamera
-    from metadrive.constants import HELP_MESSAGE
-    config = dict(
-        # controller="steering_wheel",
+
+    # Initialize environment
+    train_env_config = dict(
+        manual_control=False,  # Allow receiving control signal from external device
+        # controller=control_device,
+        window_size=(200, 200),
+        horizon=1500,
         use_render=True,
-        manual_control=False,
-        traffic_density=0.1,
-        num_scenarios=10000,
-        random_agent_model=False,
-        random_lane_width=True,
-        random_lane_num=True,
-        on_continuous_line_done=False,
-        out_of_route_done=True,
-        vehicle_config=dict(show_lidar=True, show_navi_mark=False, show_line_to_navi_mark=False),
-        # debug=True,
-        # debug_static_world=True,
-        map=4,  # seven block
-        start_seed=10,
+        image_observation=False,
+        norm_pixel=False,
+        sensors=dict(rgb_camera=(RGBCamera, 512, 256)),
+        # render_pipeline=True
     )
-    # if args.observation == "rgb_camera":
-    if True:
-        config.update(
-            dict(
-                image_observation=True,
-                sensors=dict(rgb_camera=(RGBCamera, 400, 300)),
-                interface_panel=["rgb_camera", "dashboard"]
-            )
-        )
-    env = MetaDriveEnv(config)
+
+
+    def _make_train_env():
+        from pvp.experiments.metadrive.human_in_the_loop_env import HumanInTheLoopEnv5TupleReturn
+        train_env = HumanInTheLoopEnv5TupleReturn(config=train_env_config)
+        return train_env
+
+
+    env = _make_train_env()
 
     env = MetaDriveObsWrapper(env)
 
 
     # add wrappers for history and "receding horizon control", i.e. action chunking
-    env = HistoryWrapper(env, horizon=1)
-    env = RHCWrapper(env, exec_horizon=50)
+    env = HistoryWrapper(env, horizon=5)
+    env = RHCWrapper(env, exec_horizon=5)
 
     # TODO Which order?
     env = ResizeImageWrapper(env, resize_size=(256, 256))
+
+    # TEST
+    ret = env.reset()
+
+    # load finetuned model
+    logging.info("Loading finetuned model...")
+
+    finetuned_path = FLAGS.finetuned_path
+    model = OctoModel.load_pretrained(finetuned_path)
+
 
     # wrap env to handle action/proprio normalization -- match normalization type to the one used during finetuning
     env = UnnormalizeActionProprio(
@@ -132,7 +159,12 @@ def main(_):
         images = [obs["image_primary"]]
 
         episode_return = 0.0
-        while len(images) < 400:
+
+
+        # while len(images) < 100:
+        horizon = 1000
+        for _ in tqdm.trange(horizon,):
+
             # model returns actions of shape [batch, pred_horizon, action_dim] -- remove batch
             actions = model.sample_actions(
                 jax.tree_map(lambda x: x[None], obs), task, rng=jax.random.PRNGKey(0)
