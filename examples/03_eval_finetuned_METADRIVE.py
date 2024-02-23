@@ -147,7 +147,7 @@ def main(_):
     )
 
     # running rollouts
-    for _ in range(3):
+    for _ in range(5):
         obs, info = env.reset()
 
         # create task specification --> use model utility to create task dict with correct entries
@@ -176,17 +176,23 @@ def main(_):
             obs, reward, done, trunc, info = env.step(actions)
 
             # PZH
-            images.extend([obs["image_primary"]])
+            images.extend([o for o in obs["image_primary"]])
             # images.extend([o["image_primary"][0] for o in info["observations"]])
 
             episode_return += reward
             if done or trunc:
                 break
         print(f"Episode return: {episode_return}")
+        print(f"Success: {info['arrive_dest'][-1]}")
+
+        # log rollout video to wandb -- subsample temporally 2x for faster logging
+        # wandb.log(
+        #     {"rollout_video": wandb.Video(np.array(images).transpose(0, 3, 1, 2)[::2])}
+        # )
 
         # log rollout video to wandb -- subsample temporally 2x for faster logging
         wandb.log(
-            {"rollout_video": wandb.Video(np.array(images).transpose(0, 3, 1, 2)[::2])}
+            {"rollout_video": wandb.Video(np.array(images).transpose(0, 3, 1, 2), fps=30)}
         )
 
 
