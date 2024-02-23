@@ -79,7 +79,8 @@ def main(_):
     tf.config.experimental.set_visible_devices([], "GPU")
 
     # setup wandb for logging
-    wandb.init(name="eval_metadrive", project="octo")
+    exp_name = FLAGS.exp_name
+    wandb.init(name=exp_name, project="octo")
 
 
     # make gym environment
@@ -106,7 +107,7 @@ def main(_):
     from metadrive.component.sensors.rgb_camera import RGBCamera
 
     # Initialize environment
-    train_env_config = dict(
+    env_config = dict(
         manual_control=False,  # Allow receiving control signal from external device
         # controller=control_device,
         window_size=(200, 200),
@@ -119,13 +120,13 @@ def main(_):
     )
 
 
-    def _make_train_env():
+    def _make_env():
         from pvp.experiments.metadrive.human_in_the_loop_env import HumanInTheLoopEnv5TupleReturn
-        train_env = HumanInTheLoopEnv5TupleReturn(config=train_env_config)
+        train_env = HumanInTheLoopEnv5TupleReturn(config=env_config)
         return train_env
 
 
-    env = _make_train_env()
+    env = _make_env()
 
     env = MetaDriveObsWrapper(env)
 
@@ -152,8 +153,10 @@ def main(_):
         env, model.dataset_statistics, normalization_type="normal"
     )
 
+    images_list = []
+
     # running rollouts
-    for _ in range(10):
+    for _ in range(20):
         obs, info = env.reset()
 
         # create task specification --> use model utility to create task dict with correct entries
@@ -190,16 +193,21 @@ def main(_):
                 break
         print(f"Episode return: {episode_return}")
         print(f"Success: {info['arrive_dest'][-1]}")
-
+        images_list.append(images)
         # log rollout video to wandb -- subsample temporally 2x for faster logging
         # wandb.log(
         #     {"rollout_video": wandb.Video(np.array(images).transpose(0, 3, 1, 2)[::2])}
         # )
 
         # log rollout video to wandb -- subsample temporally 2x for faster logging
-        wandb.log(
-            {"rollout_video": wandb.Video(np.array(images).transpose(0, 3, 1, 2), fps=30)}
-        )
+    wandb.log(
+        {
+            "rollout_video": wandb.Video(np.array(
+                [np.array(images).transpose(0, 3, 1, 2) for images in images_list]
+            ), fps=20)
+        },
+        step=0
+    )
 
 
 if __name__ == "__main__":
