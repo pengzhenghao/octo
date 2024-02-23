@@ -287,7 +287,7 @@ def main(_):
                 flax.traverse_util.flatten_dict({"training": update_info}, sep="/"),
                 step=i,
             )
-        if (i % 1000 == 0 and i > 0) or (i == total_steps - 1):
+        if (i % 5000 == 0 and i > 0) or (i == total_steps - 1):
             # save checkpoint
             train_state.model.save_pretrained(step=i, checkpoint_path=save_dir)
 

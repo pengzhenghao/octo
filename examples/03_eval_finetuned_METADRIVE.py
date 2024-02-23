@@ -71,6 +71,12 @@ def main(_):
     if not FLAGS.wandb:
         import os
         os.environ["WANDB_MODE"] = "offline"
+    import os
+    # os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+    os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.8"
+
+    import tensorflow as tf
+    tf.config.experimental.set_visible_devices([], "GPU")
 
     # setup wandb for logging
     wandb.init(name="eval_metadrive", project="octo")
@@ -159,6 +165,7 @@ def main(_):
         images = [o for o in obs["image_primary"]]
 
         episode_return = 0.0
+
 
         # while len(images) < 100:
         horizon = 1000
