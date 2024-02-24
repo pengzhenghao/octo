@@ -1,33 +1,48 @@
-"""
-This script demonstrates how to finetune Octo to a new observation space (single camera + proprio)
-and new action space (bimanual) using a simulated ALOHA cube handover dataset (https://tonyzhaozh.github.io/aloha/).
+import datetime
+import imp
+import os
+import pathlib
+from functools import partial
 
-To run this example, first download and extract the dataset from here: https://rail.eecs.berkeley.edu/datasets/example_sim_data.zip
-
-python examples/02_finetune_new_observation_action.py --pretrained_path=hf://rail-berkeley/octo-small --data_dir=...
-"""
-from absl import app, flags, logging
 import flax
 import jax
 import optax
 import tensorflow as tf
 import tqdm
-import wandb
-import pathlib
+from absl import app, flags, logging
+from flax.traverse_util import flatten_dict
+from jax.sharding import Mesh, NamedSharding, PartitionSpec
+from ml_collections import config_flags, ConfigDict
 
+import wandb
 from octo.data.dataset import make_single_dataset
-from octo.data.utils.data_utils import NormalizationType
-from octo.model.components.action_heads import L1ActionHead, DiffusionActionHead
+from octo.model.components.action_heads import DiffusionActionHead
 from octo.model.components.tokenizers import LowdimObsTokenizer
 from octo.model.octo_model import OctoModel
 from octo.utils.jax_utils import initialize_compilation_cache
 from octo.utils.spec import ModuleSpec
+from octo.utils.train_callbacks import (
+    RolloutVisualizationCallback,
+    SaveCallback,
+    ValidationCallback,
+    VisualizationCallback,
+)
 from octo.utils.train_utils import (
-    freeze_weights,
+    check_config_diff,
+    create_optimizer,
+    format_name_with_config,
     merge_params,
     process_text,
+    Timer,
     TrainState,
 )
+
+try:
+    from jax_smi import initialise_tracking  # type: ignore
+
+    initialise_tracking()
+except ImportError:
+    pass
 
 FLAGS = flags.FLAGS
 
@@ -35,15 +50,15 @@ flags.DEFINE_string(
     "pretrained_path", "hf://rail-berkeley/octo-small", "Path to pre-trained Octo checkpoint directory."
 )
 flags.DEFINE_string("data_dir", "metadrive_dataset", "Path to finetuning dataset, in RLDS format.")
-flags.DEFINE_string("save_dir", "/data/zhenghao/octo/models/", "Directory for saving finetuning checkpoints.")
+flags.DEFINE_string("save_dir", "/home/zhenghao/octo/models/", "Directory for saving finetuning checkpoints.")
 flags.DEFINE_integer("batch_size", 3, "Batch size for finetuning.")
 flags.DEFINE_integer("total_steps", 5000, "total steps.", short_name="total_step")
 
-flags.DEFINE_bool(
-    "freeze_transformer",
-    False,
-    "Whether pre-trained transformer weights should be frozen.",
-)
+# flags.DEFINE_bool(
+#     "freeze_transformer",
+#     False,
+#     "Whether pre-trained transformer weights should be frozen.",
+# )
 
 flags.DEFINE_bool(
     "wandb",
@@ -62,143 +77,164 @@ flags.DEFINE_string(
     "suffix to the split. Default: None. Could be: [:5%]",
 )
 
+flags.DEFINE_string("name", "finetune_metadrive", "Experiment name.")
+flags.DEFINE_bool("debug", False, "Debug config (no wandb logging)")
+
+default_config_file = os.path.join(
+    os.path.dirname(__file__), "configs/finetune_metadrive_config.py"
+)
+config_flags.DEFINE_config_file(
+    "config",
+    default_config_file,
+    "File path to the training hyperparameter configuration.",
+    lock_config=False,
+)
+
 REPO_ROOT = pathlib.Path(__file__).parent.parent.resolve()
 
+
 def main(_):
+    # import octo-small
+    # os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+    # os.environ["XLA_FLAGS"] = "--xla_gpu_strict_conv_algorithm_picker=false --xla_gpu_force_compilation_parallelism=1"
 
-    # PZH
-    # Verify if GPU can be used.
-    print("DEVICES: ", jax.devices("gpu"))
-
-    assert (
-        FLAGS.batch_size % jax.device_count() == 0
-    ), "Batch size must be divisible by device count."
+    # # PZH
+    # # Verify if GPU can be used.
+    # print("DEVICES: ", jax.devices("gpu"))
+    #
+    # assert (
+    #     FLAGS.batch_size % jax.device_count() == 0
+    # ), "Batch size must be divisible by device count."
+    #
+    # initialize_compilation_cache()
+    # # prevent tensorflow from using GPU memory since it's only used for data loading
+    # tf.config.set_visible_devices([], "GPU")
+    #
+    # # setup wandb for logging
+    # if not FLAGS.wandb:
+    #     import os
+    #     os.environ["WANDB_MODE"] = "offline"
+    #
+    # wandb.init(name="finetune_metadrive", project="octo")
+    #
+    # # wandb.init(
+    # #     config=FLAGS.config.to_dict(),
+    # #     id=wandb_id,
+    # #     name=exp_name,
+    # #     mode="disabled" if FLAGS.debug else None,
+    # #     **FLAGS.config.wandb,
+    # # )
+    #
+    #
+    #
+    # # PZH
+    # ACTION_DIM = 2
+    #
+    # # dataset_name = args.dataset_name
+    #
+    # data_dir = "metadrive_dataset" #/ "metadrive_dataset" / "1.0.0"
+    # module = importlib.import_module(data_dir)
+    # print(f"{module} is loaded.")
+    #
+    # data_dir = pathlib.Path("/home/zhenghao/octo") / "metadrive_dataset"
+    #
+    # save_dir = REPO_ROOT / FLAGS.save_dir
+    #
+    #
 
     initialize_compilation_cache()
+    devices = jax.devices()
+    logging.info(
+        f"""
+        Octo Finetuning Script
+        ======================
+        Pretrained model: {FLAGS.config.pretrained_path}
+        Finetuning Dataset: {FLAGS.config.dataset_kwargs.name}
+        Data dir: {FLAGS.config.dataset_kwargs.data_dir}
+        Task Modality: {FLAGS.config.modality}
+        Finetuning Mode: {FLAGS.config.finetuning_mode}
+
+        # Devices: {jax.device_count()}
+        Batch size: {FLAGS.config.batch_size} ({FLAGS.config.batch_size // len(devices)} per device)
+        # Steps: {FLAGS.config.num_steps}
+    """
+    )
+
+    #########
+    #
+    # Setup Jax Data Parallelism
+    #
+    #########
+
+    assert (
+            FLAGS.config.batch_size % len(devices) == 0
+    ), f"Batch size ({FLAGS.config.batch_size}) must be divisible by the number of devices ({len(devices)})"
+    assert (
+            FLAGS.config.viz_kwargs.eval_batch_size % len(devices) == 0
+    ), f"Eval batch size ({FLAGS.config.viz_kwargs.eval_batch_size}) must be divisible by the number of devices ({len(devices)})"
+
+    # create a 1D mesh with a single axis named "batch"
+    mesh = Mesh(jax.devices(), axis_names="batch")
+    # Our batches will be data-parallel sharded -- each device will get a slice of the batch
+    dp_sharding = NamedSharding(mesh, PartitionSpec("batch"))
+    # Our model will be replicated across devices (we are only doing data parallelism, not model parallelism)
+    replicated_sharding = NamedSharding(mesh, PartitionSpec())
+
     # prevent tensorflow from using GPU memory since it's only used for data loading
     tf.config.set_visible_devices([], "GPU")
 
-    # setup wandb for logging
-    if not FLAGS.wandb:
-        import os
-        os.environ["WANDB_MODE"] = "offline"
+    #########
+    #
+    # Setup WandB
+    #
+    #########
 
-    wandb.init(name="finetune_metadrive", project="octo")
-
-
-    # PZH
-    ACTION_DIM = 2
-
-    import importlib
-    # dataset_name = args.dataset_name
-
-    data_dir = "metadrive_dataset" #/ "metadrive_dataset" / "1.0.0"
-    module = importlib.import_module(data_dir)
-    print(f"{module} is loaded.")
-
-    data_dir = pathlib.Path("/home/zhenghao/octo") / "metadrive_dataset"
-
-    save_dir = REPO_ROOT / FLAGS.save_dir
-
-    def get_time_str():
-        import datetime
-        return datetime.datetime.now().strftime("%Y-%m-%d_%H%M")
-
-    exp_name = FLAGS.exp_name
-    trial_id = get_time_str()
-    name = "{}_{}".format(exp_name, trial_id)
-    save_dir = save_dir / name
-    save_dir.mkdir(exist_ok=True)
-
-    # print(f"Visualizing data from dataset: {data_dir}")
-
-
-
-    # make finetuning dataset
-    # apply Gaussian normalization, load chunks of 50 actions since we'll train with action chunking
-    # delete goal images in the data loader since we will train a language-conditioned-only policy
-    # TODO: directly load this from raw data to make it less opaque?
-    logging.info("Loading finetuning dataset...")
-    split_suffix = FLAGS.split_suffix
-    dataset = make_single_dataset(
-        dataset_kwargs=dict(
-
-            # PZH
-            name="metadrive_dataset",
-
-            data_dir=data_dir,
-            split_suffix=split_suffix,
-
-            # PZH
-            # image_obs_keys={"primary": "top"},
-            image_obs_keys={"primary": "image"},
-
-            state_obs_keys=["state"],
-            language_key="language_instruction",
-            action_proprio_normalization_type=NormalizationType.NORMAL,
-
-            # PZH
-            absolute_action_mask=[True] * ACTION_DIM,
-
-        ),
-        traj_transform_kwargs=dict(
-
-
-            # PZH
-            # window_size=1,
-            window_size=5,
-
-            # PZH
-            # future_action_window_size=49,  # so we get 50 actions for our action chunk
-            future_action_window_size=5,
-
-        ),
-        frame_transform_kwargs=dict(
-            resize_size={"primary": (256, 256)},
-        ),
-        train=True,
+    name = format_name_with_config(
+        FLAGS.name,
+        FLAGS.config.to_dict(),
+    )
+    wandb_id = "{name}_{time}".format(
+        name=name,
+        time=datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    )
+    wandb.init(
+        config=FLAGS.config.to_dict(),
+        id=wandb_id,
+        name=name,
+        mode="disabled" if FLAGS.debug else None,
+        **FLAGS.config.wandb,
     )
 
-    # PZH
-    train_data_iter = (
-        dataset.repeat()
-        .unbatch()
-        .shuffle(200)  # can reduce this if RAM consumption too high
-        .batch(FLAGS.batch_size)
-        .iterator()
+    #########
+    #
+    # Load Pretrained model + optionally modify config
+    #
+    #########
+
+    pretrained_model = OctoModel.load_pretrained(
+        FLAGS.config.pretrained_path,
+        step=FLAGS.config.pretrained_step,
     )
-    # train_data_iter = (
-    #     dataset.repeat()
-    #     .unbatch()
-    #     .shuffle(1)  # can reduce this if RAM consumption too high
-    #     .batch(1)
-    #     .iterator()
-    # )
+    flat_config = flax.traverse_util.flatten_dict(
+        pretrained_model.config, keep_empty_nodes=True
+    )
+    for d_key in flax.traverse_util.flatten_dict(
+            FLAGS.config.get("config_delete_keys", ConfigDict()).to_dict()
+    ):
+        for c_key in list(flat_config.keys()):
+            if ".".join(c_key).startswith(".".join(d_key)):
+                del flat_config[c_key]
 
+    config = ConfigDict(flax.traverse_util.unflatten_dict(flat_config))
+    config.update(FLAGS.config.get("update_config", ConfigDict()))
 
-
-    # load pre-trained model
-    logging.info("Loading pre-trained model...")
-    pretrained_model = OctoModel.load_pretrained(FLAGS.pretrained_path)
-
-
-
-    # run text tokenizer over batch (this needs to happen before training / sharding) + delete unused keys
-    text_processor = pretrained_model.text_processor
-
-    def process_batch(batch):
-        batch = process_text(batch, text_processor)
-        del batch["dataset_name"]
-        return batch
-
-    train_data_iter = map(process_batch, train_data_iter)
-    example_batch = next(train_data_iter)
+    # Overwrite observation and action spaces-related config
 
     # load pre-training config and modify --> remove wrist cam, add proprio input, change action head
     # following Zhao et al. we use "action chunks" of length 50 and L1 loss for ALOHA
-    config = pretrained_model.config
+    # config = pretrained_model.config
     del config["model"]["observation_tokenizers"]["wrist"]
-    ###
+
     config["model"]["observation_tokenizers"]["proprio"] = ModuleSpec.create(
         LowdimObsTokenizer,
         n_bins=256,
@@ -209,53 +245,143 @@ def main(_):
     )
     # Fully override the old action head with a new one (for smaller changes, you can use update_module_config)
     config["model"]["heads"]["action"] = ModuleSpec.create(
-
-        # TODO: Use diffusion here?
-        # L1ActionHead,
         DiffusionActionHead,
-
-        # TODO: ??
         pred_horizon=5,
-
         # PZH
-        action_dim=ACTION_DIM,
-
+        action_dim=2,
         readout_key="readout_action",
     )
 
-    # initialize weights for modified Octo model, then merge in all applicable pre-trained weights
-    # new position encodings for proprio inputs & weights for new action head will remain "from scratch"
-    logging.info("Updating model for new observation & action space...")
+    config = config.to_dict()
+    check_config_diff(config, pretrained_model.config)
+
+    #########
+    #
+    # Setup Data Loader
+    #
+    #########
+
+    # create text processor
+    if config["text_processor"] is None:
+        text_processor = None
+    else:
+        text_processor = ModuleSpec.instantiate(config["text_processor"])()
+
+    def process_batch(batch):
+        batch = process_text(batch, text_processor)
+        del batch["dataset_name"]
+        return batch
+
+    # load standardize_fn from `path/to/file.py:fn_name` format
+    if (
+            standardize_fn := FLAGS.config["dataset_kwargs"].get("standardize_fn", None)
+    ) is not None:
+        path, name = standardize_fn.split(":")
+        # imp is deprecated, but it's also what ml_collections uses
+        standardize_fn = getattr(imp.load_source("standardize_fn", path), name)
+        del FLAGS.config["dataset_kwargs"]["standardize_fn"]
+        FLAGS.config["dataset_kwargs"]["standardize_fn"] = standardize_fn
+
+    dataset = make_single_dataset(
+        FLAGS.config.dataset_kwargs,
+        traj_transform_kwargs=FLAGS.config.traj_transform_kwargs,
+        frame_transform_kwargs=FLAGS.config.frame_transform_kwargs,
+        train=True,
+    )
+    train_data_iter = (
+        dataset.repeat()
+        .unbatch()
+        .shuffle(FLAGS.config.shuffle_buffer_size)
+        .batch(FLAGS.config.batch_size)
+        .iterator()
+    )
+    train_data_iter = map(process_batch, train_data_iter)
+    example_batch = next(train_data_iter)
+
+    #########
+    #
+    # Load Pretrained Model
+    #
+    #########
+
+    rng = jax.random.PRNGKey(FLAGS.config.seed)
+    rng, init_rng = jax.random.split(rng)
     model = OctoModel.from_config(
         config,
         example_batch,
         text_processor,
-        verbose=True,
+        rng=init_rng,
         dataset_statistics=dataset.dataset_statistics,
     )
     merged_params = merge_params(model.params, pretrained_model.params)
-    # can perform any additional parameter surgery here...
-    # ...
     model = model.replace(params=merged_params)
     del pretrained_model
 
-    # create optimizer & train_state, optionally freeze keys for pre-trained transformer
-    # train_state bundles parameters & optimizers
-    learning_rate = optax.join_schedules(
-        [optax.linear_schedule(0, 3e-5, 100), optax.constant_schedule(3e-5)], [100]
+    #########
+    #
+    # Setup Optimizer and Train State
+    #
+    #########
+
+    params = model.params
+    if FLAGS.config.optimizer.frozen_keys is None:
+        FLAGS.config.optimizer.frozen_keys = model.config["optimizer"]["frozen_keys"]
+
+    tx, lr_callable, param_norm_callable = create_optimizer(
+        params,
+        **FLAGS.config.optimizer.to_dict(),
     )
-    tx = optax.adamw(learning_rate)
-    frozen_keys = model.config["optimizer"]["frozen_keys"]
-    if FLAGS.freeze_transformer:
-        frozen_keys.append("BlockTransformer_0")
-    tx = freeze_weights(tx, model.params, frozen_keys)
     train_state = TrainState.create(
-        rng=jax.random.PRNGKey(1234),
         model=model,
         tx=tx,
+        rng=rng,
     )
 
-    # define loss function and train step
+    #########
+    #
+    # Save all metadata
+    #
+    #########
+
+    if FLAGS.config.save_dir is not None:
+        save_dir = tf.io.gfile.join(
+            FLAGS.config.save_dir,
+            FLAGS.config.wandb.project,
+            FLAGS.config.wandb.group or "",
+            wandb_id,
+        )
+        wandb.config.update(dict(save_dir=save_dir), allow_val_change=True)
+        logging.info("Saving to %s", save_dir)
+        save_callback = SaveCallback(save_dir)
+
+        # Add window_size to top of config, to make eval easier
+        new_config = ConfigDict(model.config)
+        new_config["window_size"] = example_batch["observation"]["pad_mask"].shape[1]
+        model = model.replace(config=new_config)
+
+        # Save finetuning config since it's not saved by SaveCallback, i.e. as part of model.save_pretrained()
+        with open(
+                tf.io.gfile.join(save_dir, "finetune_config.json"), "w"
+        ) as config_file:
+            config_file.write(FLAGS.config.to_json_best_effort())
+    else:
+        save_dir = None
+        save_callback = SaveCallback(None)
+        logging.warning("save_dir not passed in, not saving checkpoints")
+
+    example_batch_spec = jax.tree_map(
+        lambda arr: (arr.shape, str(arr.dtype)), example_batch
+    )
+    wandb.config.update(
+        dict(example_batch_spec=example_batch_spec), allow_val_change=True
+    )
+
+    #########
+    #
+    # Define loss, train_step, and eval_step
+    #
+    #########
+
     def loss_fn(params, batch, rng, train=True):
         bound_module = model.module.bind({"params": params}, rngs={"dropout": rng})
         transformer_embeddings = bound_module.octo_transformer(
@@ -272,30 +398,139 @@ def main(_):
         )
         return action_loss, action_metrics
 
-    @jax.jit
+    # Data parallelism
+    # Model is replicated across devices, data is split across devices
+    @partial(
+        jax.jit,
+        in_shardings=[replicated_sharding, dp_sharding],
+    )
     def train_step(state, batch):
         rng, dropout_rng = jax.random.split(state.rng)
         (loss, info), grads = jax.value_and_grad(loss_fn, has_aux=True)(
             state.model.params, batch, dropout_rng, train=True
         )
+        # Gradient Metrics (TODO: Does the finetuner need these?) ###
+        # grad_norm = optax.global_norm(grads)
+        updates, _ = state.tx.update(grads, state.opt_state, state.model.params)
+        # update_norm = optax.global_norm(updates)
+        info.update(
+            {
+                # "grad_norm": grad_norm,
+                # "update_norm": update_norm,
+                # "param_norm": param_norm_callable(state.model.params),
+                "learning_rate": lr_callable(state.step),
+            }
+        )
+        # End Debug Metrics #
+
         new_state = state.apply_gradients(grads=grads, rng=rng)
         return new_state, info
 
-    # run finetuning loop
-    total_steps = FLAGS.total_steps
-    logging.info("Starting finetuning...")
-    for i in tqdm.tqdm(range(total_steps), total=total_steps, dynamic_ncols=True):
-        batch = next(train_data_iter)
-        train_state, update_info = train_step(train_state, batch)
-        if (i + 1) % 100 == 0:
+    #########
+    #
+    # Build validation & visualization callbacks
+    #
+    #########
+
+    if FLAGS.config.modality == "image_conditioned":
+        modes_to_evaluate = ["image_conditioned"]
+    elif FLAGS.config.modality == "text_conditioned":
+        modes_to_evaluate = ["text_conditioned"]
+    elif FLAGS.config.modality == "multimodal":
+        modes_to_evaluate = ["image_conditioned", "text_conditioned"]
+    else:
+        modes_to_evaluate = ["base"]
+
+    dataset_kwargs_list = [FLAGS.config.dataset_kwargs]
+
+    val_callback = ValidationCallback(
+        loss_fn=loss_fn,
+        process_batch_fn=process_batch,
+        text_processor=text_processor,
+        val_dataset_kwargs_list=dataset_kwargs_list,
+        dataset_kwargs=FLAGS.config,
+        modes_to_evaluate=modes_to_evaluate,
+        **FLAGS.config.val_kwargs,
+    )
+
+    viz_callback = VisualizationCallback(
+        text_processor=text_processor,
+        val_dataset_kwargs_list=dataset_kwargs_list,
+        dataset_kwargs=FLAGS.config,
+        modes_to_evaluate=modes_to_evaluate,
+        **FLAGS.config.viz_kwargs,
+    )
+
+    #########
+    #
+    # Optionally build visualizers for sim env evals
+    #
+    #########
+
+    if "rollout_kwargs" in FLAGS.config:
+        rollout_callback = RolloutVisualizationCallback(
+            text_processor=text_processor,
+            history_length=FLAGS.config["window_size"],
+            model_pred_horizon=config["model"]["heads"]["action"]["kwargs"].get(
+                "pred_horizon", 1
+            ),
+            **FLAGS.config.rollout_kwargs.to_dict(),
+        )
+    else:
+        rollout_callback = None
+
+    #########
+    #
+    # Train loop
+    #
+    #########
+
+    def wandb_log(info, step):
+        wandb.log(flatten_dict(info, sep="/"), step=step)
+
+    timer = Timer()
+
+    for i in tqdm.tqdm(
+            range(0, int(FLAGS.config.num_steps)),
+            total=int(FLAGS.config.num_steps),
+            dynamic_ncols=True,
+            desc="Training Steps"
+    ):
+        timer.tick("total")
+
+        with timer("dataset"):
+            batch = next(train_data_iter)
+
+        with timer("train"):
+            train_state, update_info = train_step(train_state, batch)
+
+        timer.tock("total")
+
+        if (i + 1) % FLAGS.config.log_interval == 0:
             update_info = jax.device_get(update_info)
-            wandb.log(
-                flax.traverse_util.flatten_dict({"training": update_info}, sep="/"),
-                step=i,
+            wandb_log(
+                {"training": update_info, "timer": timer.get_average_times()}, step=i
             )
-        if (i % 5000 == 0 and i > 0) or (i == total_steps - 1):
-            # save checkpoint
-            train_state.model.save_pretrained(step=i, checkpoint_path=save_dir)
+
+        if (i + 1) % FLAGS.config.eval_interval == 0:
+            logging.info("Evaluating...")
+
+            with timer("val"):
+                val_metrics = val_callback(train_state, i + 1)
+                wandb_log(val_metrics, step=i)
+
+            # with timer("visualize"):
+            #     viz_metrics = viz_callback(train_state, i + 1)
+            #     wandb_log(viz_metrics, step=i)
+
+            if rollout_callback is not None:
+                with timer("rollout"):
+                    rollout_metrics = rollout_callback(train_state, i + 1)
+                    wandb_log(rollout_metrics, step=i)
+
+        if (i + 1) % FLAGS.config.save_interval == 0 and save_dir is not None:
+            logging.info("Saving checkpoint...")
+            save_callback(train_state, i + 1)
 
 
 if __name__ == "__main__":

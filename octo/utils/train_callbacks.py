@@ -242,7 +242,7 @@ class ValidationCallback(Callback):
             for _, batch in tqdm.tqdm(
                 zip(range(self.num_val_batches), val_data_iter),
                 total=self.num_val_batches,
-                desc=name,
+                desc="Evaluating on " + name,
             ):
                 metrics.append(self.eval_step(train_state, batch))
             metrics = jax.tree_map(lambda *xs: np.mean(xs), *metrics)
@@ -259,7 +259,7 @@ class VisualizationCallback(Callback):
     trajs_for_metrics: int
     trajs_for_viz: int
     samples_per_state: int
-    modes_to_evaluate: str = ("text_conditioned", "image_conditioned")
+    modes_to_evaluate: Sequence[str] = ("text_conditioned", "image_conditioned")
     train: bool = False
 
     def __post_init__(self):
