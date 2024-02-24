@@ -404,7 +404,7 @@ def make_dataset_from_rlds(
     else:
         split = "train" if train else "val"
 
-    if split_suffix is not None:
+    if split_suffix:
         split = split + split_suffix
 
     dataset = dl.DLataset.from_rlds(

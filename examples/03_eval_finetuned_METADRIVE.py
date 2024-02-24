@@ -72,8 +72,14 @@ def main(_):
         import os
         os.environ["WANDB_MODE"] = "offline"
     import os
-    # os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-    os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.8"
+    os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+    os.environ["XLA_FLAGS"] = "--xla_gpu_strict_conv_algorithm_picker=false --xla_gpu_force_compilation_parallelism=1"
+
+    # from jax.config import config
+    #
+    # config.update('jax_disable_jit', True)
+
+
 
     import tensorflow as tf
     tf.config.experimental.set_visible_devices([], "GPU")
@@ -134,12 +140,10 @@ def main(_):
     # add wrappers for history and "receding horizon control", i.e. action chunking
     env = HistoryWrapper(env, horizon=5)
     env = RHCWrapper(env, exec_horizon=5)
-
-    # TODO Which order?
     env = ResizeImageWrapper(env, resize_size=(256, 256))
 
     # TEST
-    ret = env.reset()
+    # ret = env.reset()
 
     # load finetuned model
     logging.info("Loading finetuned model...")
@@ -153,7 +157,7 @@ def main(_):
         env, model.dataset_statistics, normalization_type="normal"
     )
 
-    images_list = []
+    # images_list = []
 
     # running rollouts
     for _ in range(20):
@@ -193,22 +197,10 @@ def main(_):
                 break
         print(f"Episode return: {episode_return}")
         print(f"Success: {info['arrive_dest'][-1]}")
-        images_list.append(images)
-        # log rollout video to wandb -- subsample temporally 2x for faster logging
-        # wandb.log(
-        #     {"rollout_video": wandb.Video(np.array(images).transpose(0, 3, 1, 2)[::2])}
-        # )
 
-        # log rollout video to wandb -- subsample temporally 2x for faster logging
-    wandb.log(
-        {
-            "rollout_video": wandb.Video(
-                np.array([np.array(images).transpose(0, 3, 1, 2) for images in images_list]), fps=20
-            )
-        },
-        step=0
-    )
-
+        wandb.log(
+            {"rollout_video": wandb.Video(np.array(images).transpose(0, 3, 1, 2)[::2])}, fps=20
+        )
 
 if __name__ == "__main__":
     app.run(main)
