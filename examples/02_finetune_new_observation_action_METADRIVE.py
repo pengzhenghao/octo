@@ -453,13 +453,13 @@ def main(_):
         **FLAGS.config.val_kwargs,
     )
 
-    viz_callback = VisualizationCallback(
-        text_processor=text_processor,
-        val_dataset_kwargs_list=dataset_kwargs_list,
-        dataset_kwargs=FLAGS.config,
-        modes_to_evaluate=modes_to_evaluate,
-        **FLAGS.config.viz_kwargs,
-    )
+    # viz_callback = VisualizationCallback(
+    #     text_processor=text_processor,
+    #     val_dataset_kwargs_list=dataset_kwargs_list,
+    #     dataset_kwargs=FLAGS.config,
+    #     modes_to_evaluate=modes_to_evaluate,
+    #     **FLAGS.config.viz_kwargs,
+    # )
 
     #########
     #
@@ -519,9 +519,9 @@ def main(_):
                 val_metrics = val_callback(train_state, i + 1)
                 wandb_log(val_metrics, step=i)
 
-            with timer("visualize"):
-                viz_metrics = viz_callback(train_state, i + 1)
-                wandb_log(viz_metrics, step=i)
+            # with timer("visualize"):
+            #     viz_metrics = viz_callback(train_state, i + 1)
+            #     wandb_log(viz_metrics, step=i)
 
             if rollout_callback is not None:
                 with timer("rollout"):

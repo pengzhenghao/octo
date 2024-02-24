@@ -18,7 +18,7 @@ def get_config(config_string="full,language_conditioned"):
 
         # PZH
         "name": "metadrive_dataset",
-        "data_dir": "/home/zhenghao/octo/metadrive_dataset",
+        "data_dir": "/bigdata/zhenghao/octo/metadrive_dataset",
         "split_suffix": "",
 
         # PZH
@@ -57,7 +57,7 @@ def get_config(config_string="full,language_conditioned"):
     else:
         raise ValueError("Invalid mode")
 
-    max_steps = FieldReference(50000)
+    max_steps = FieldReference(5_000_000)
 
     window_size = FieldReference(default=5)
 
@@ -68,8 +68,8 @@ def get_config(config_string="full,language_conditioned"):
 
         # batch_size=256,
         # shuffle_buffer_size=10000,
-        batch_size=3,
-        shuffle_buffer_size=200,
+        batch_size=24,
+        shuffle_buffer_size=10_000,
 
         num_steps=max_steps,
         log_interval=100,
@@ -89,7 +89,7 @@ def get_config(config_string="full,language_conditioned"):
                 name="cosine",
                 init_value=0.0,
                 peak_value=3e-4,
-                warmup_steps=2000,
+                warmup_steps=10_000,
                 decay_steps=max_steps,
                 end_value=0.0,
             ),
@@ -99,7 +99,7 @@ def get_config(config_string="full,language_conditioned"):
             grad_accumulation_steps=None,  # if you are using grad accumulation, you need to adjust max_steps accordingly
         ),
         val_kwargs=dict(
-            val_shuffle_buffer_size=200,
+            val_shuffle_buffer_size=10_000,
             num_val_batches=200,
         ),
         viz_kwargs=dict(
@@ -108,6 +108,7 @@ def get_config(config_string="full,language_conditioned"):
             trajs_for_viz=8,
             samples_per_state=8,
         ),
+        # rollout_kwargs=dict()
     )
 
     if task == "image_conditioned":
