@@ -46,13 +46,13 @@ except ImportError:
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_string(
-    "pretrained_path", "hf://rail-berkeley/octo-small", "Path to pre-trained Octo checkpoint directory."
-)
-flags.DEFINE_string("data_dir", "metadrive_dataset", "Path to finetuning dataset, in RLDS format.")
-flags.DEFINE_string("save_dir", "/home/zhenghao/octo/models/", "Directory for saving finetuning checkpoints.")
-flags.DEFINE_integer("batch_size", 3, "Batch size for finetuning.")
-flags.DEFINE_integer("total_steps", 5000, "total steps.", short_name="total_step")
+# flags.DEFINE_string(
+#     "pretrained_path", "hf://rail-berkeley/octo-small", "Path to pre-trained Octo checkpoint directory."
+# )
+# flags.DEFINE_string("data_dir", "metadrive_dataset", "Path to finetuning dataset, in RLDS format.")
+# flags.DEFINE_string("save_dir", "/home/zhenghao/octo/models/", "Directory for saving finetuning checkpoints.")
+# flags.DEFINE_integer("batch_size", 3, "Batch size for finetuning.")
+# flags.DEFINE_integer("total_steps", 5000, "total steps.", short_name="total_step")
 
 # flags.DEFINE_bool(
 #     "freeze_transformer",
@@ -60,22 +60,22 @@ flags.DEFINE_integer("total_steps", 5000, "total steps.", short_name="total_step
 #     "Whether pre-trained transformer weights should be frozen.",
 # )
 
-flags.DEFINE_bool(
-    "wandb",
-    False,
-    "Whether wandb",
-)
-
-flags.DEFINE_string(
-    "exp_name",
-    "finetune_metadrive",
-    "name",
-)
-flags.DEFINE_string(
-    "split_suffix",
-    None,
-    "suffix to the split. Default: None. Could be: [:5%]",
-)
+# flags.DEFINE_bool(
+#     "wandb",
+#     False,
+#     "Whether wandb",
+# )
+#
+# flags.DEFINE_string(
+#     "exp_name",
+#     "finetune_metadrive",
+#     "name",
+# )
+# flags.DEFINE_string(
+#     "split_suffix",
+#     None,
+#     "suffix to the split. Default: None. Could be: [:5%]",
+# )
 
 flags.DEFINE_string("name", "finetune_metadrive", "Experiment name.")
 flags.DEFINE_bool("debug", False, "Debug config (no wandb logging)")
