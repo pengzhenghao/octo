@@ -56,6 +56,11 @@ flags.DEFINE_string(
     "finetune_metadrive",
     "name",
 )
+flags.DEFINE_string(
+    "split_suffix",
+    None,
+    "suffix to the split. Default: None. Could be: [:5%]",
+)
 
 REPO_ROOT = pathlib.Path(__file__).parent.parent.resolve()
 
@@ -114,6 +119,7 @@ def main(_):
     # delete goal images in the data loader since we will train a language-conditioned-only policy
     # TODO: directly load this from raw data to make it less opaque?
     logging.info("Loading finetuning dataset...")
+    split_suffix = FLAGS.split_suffix
     dataset = make_single_dataset(
         dataset_kwargs=dict(
 
@@ -121,7 +127,7 @@ def main(_):
             name="metadrive_dataset",
 
             data_dir=data_dir,
-            split_suffix="[:5%]",
+            split_suffix=split_suffix,
 
             # PZH
             # image_obs_keys={"primary": "top"},
