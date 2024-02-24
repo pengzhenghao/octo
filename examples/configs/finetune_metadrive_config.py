@@ -75,7 +75,7 @@ def get_config(config_string="full,language_conditioned"):
         log_interval=100,
         eval_interval=5000,
         save_interval=5000,
-        save_dir=placeholder(str),
+        save_dir="/bigdata/zhenghao/octo/",
         seed=42,
         wandb=dict(
             project="octo_finetune_metadrive", group=placeholder(str), entity=placeholder(str)

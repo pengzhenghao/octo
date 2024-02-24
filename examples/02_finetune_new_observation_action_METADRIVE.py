@@ -364,6 +364,7 @@ def main(_):
                 tf.io.gfile.join(save_dir, "finetune_config.json"), "w"
         ) as config_file:
             config_file.write(FLAGS.config.to_json_best_effort())
+        logging.info(f"save_dir is set to {save_dir}")
     else:
         save_dir = None
         save_callback = SaveCallback(None)
