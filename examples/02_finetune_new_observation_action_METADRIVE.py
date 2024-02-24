@@ -519,9 +519,9 @@ def main(_):
                 val_metrics = val_callback(train_state, i + 1)
                 wandb_log(val_metrics, step=i)
 
-            # with timer("visualize"):
-            #     viz_metrics = viz_callback(train_state, i + 1)
-            #     wandb_log(viz_metrics, step=i)
+            with timer("visualize"):
+                viz_metrics = viz_callback(train_state, i + 1)
+                wandb_log(viz_metrics, step=i)
 
             if rollout_callback is not None:
                 with timer("rollout"):

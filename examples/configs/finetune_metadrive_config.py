@@ -100,7 +100,7 @@ def get_config(config_string="full,language_conditioned"):
         ),
         val_kwargs=dict(
             val_shuffle_buffer_size=200,
-            num_val_batches=16,
+            num_val_batches=200,
         ),
         viz_kwargs=dict(
             eval_batch_size=128,
@@ -150,18 +150,18 @@ def get_config(config_string="full,language_conditioned"):
             "random_hue",
         ],
     )
-    wrist_augment_kwargs = dict(
-        random_brightness=[0.1],
-        random_contrast=[0.9, 1.1],
-        random_saturation=[0.9, 1.1],
-        random_hue=[0.05],
-        augment_order=[
-            "random_brightness",
-            "random_contrast",
-            "random_saturation",
-            "random_hue",
-        ],
-    )
+    # wrist_augment_kwargs = dict(
+    #     random_brightness=[0.1],
+    #     random_contrast=[0.9, 1.1],
+    #     random_saturation=[0.9, 1.1],
+    #     random_hue=[0.05],
+    #     augment_order=[
+    #         "random_brightness",
+    #         "random_contrast",
+    #         "random_saturation",
+    #         "random_hue",
+    #     ],
+    # )
     frame_transform_kwargs = dict(
         resize_size={
             "primary": (256, 256),  # workspace (3rd person) camera is at 256x256
@@ -169,7 +169,7 @@ def get_config(config_string="full,language_conditioned"):
         },
         image_augment_kwargs=[
             workspace_augment_kwargs,
-            wrist_augment_kwargs,
+            # wrist_augment_kwargs,
         ],
     )
     # If the default data loading speed is too slow, try these:
