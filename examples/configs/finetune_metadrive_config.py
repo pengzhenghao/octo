@@ -25,7 +25,9 @@ def get_config(config_string="full,language_conditioned"):
         "image_obs_keys": {"primary": "image", "wrist": None},
         # "image_obs_keys": {"primary": "image_0", "wrist": None},
 
-        "state_obs_keys": ["state", None],
+        # PZH
+        "state_obs_keys": ["state", ],
+
         "language_key": "language_instruction",
         "action_proprio_normalization_type": "normal",
         # All actions are relative deltas, except for the last one (gripper) which is absolute

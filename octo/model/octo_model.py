@@ -211,6 +211,7 @@ class OctoModel:
             checkpoint_path (str): A path to either a directory of checkpoints or a single checkpoint.
             step (int, optional): If multiple checkpoints are present, which one to load. Defaults to the latest.
         """
+        checkpoint_path = str(checkpoint_path)
         if checkpoint_path.startswith("hf://"):
             if step:
                 raise ValueError(

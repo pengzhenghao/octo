@@ -269,7 +269,9 @@ class ResizeImageWrapper(gym.ObservationWrapper):
         return observation
 
 
-class UnnormalizeActionProprio(gym.ActionWrapper, gym.ObservationWrapper):
+
+
+class UnnormalizeActionProprioAction(gym.ActionWrapper):
     """
     Un-normalizes the action and proprio.
     """
@@ -279,7 +281,8 @@ class UnnormalizeActionProprio(gym.ActionWrapper, gym.ObservationWrapper):
         env: gym.Env,
         action_proprio_metadata: dict,
         normalization_type: str,
-        key="proprio"
+        key="proprio",
+        pad_to_260=False,  # Debug
     ):
         self.action_proprio_metadata = jax.tree_map(
             lambda x: np.array(x),
@@ -289,8 +292,10 @@ class UnnormalizeActionProprio(gym.ActionWrapper, gym.ObservationWrapper):
         self.normalization_type = normalization_type
         super().__init__(env)
         self.key = key
+        self.pad_to_260 = pad_to_260
 
     def unnormalize(self, data, metadata):
+
         mask = metadata.get("mask", np.ones_like(metadata["mean"], dtype=bool))
         if self.normalization_type == "normal":
             return np.where(
@@ -310,7 +315,44 @@ class UnnormalizeActionProprio(gym.ActionWrapper, gym.ObservationWrapper):
                 f"Unknown action/proprio normalization type: {self.normalization_type}"
             )
 
+    def action(self, action):
+        return self.unnormalize(action, self.action_proprio_metadata["action"])
+
+
+
+class UnnormalizeActionProprio(gym.ObservationWrapper):
+    """
+    Un-normalizes the action and proprio.
+    """
+
+    def __init__(
+        self,
+        env: gym.Env,
+        action_proprio_metadata: dict,
+        normalization_type: str,
+        key="proprio",
+        pad_to_260=False,  # Debug
+    ):
+        self.action_proprio_metadata = jax.tree_map(
+            lambda x: np.array(x),
+            action_proprio_metadata,
+            is_leaf=lambda x: isinstance(x, list),
+        )
+        self.normalization_type = normalization_type
+
+        # env = UnnormalizeActionProprioAction(env, action_proprio_metadata, normalization_type, key, pad_to_260)
+
+        super().__init__(env)
+        self.key = key
+        self.pad_to_260 = pad_to_260
+
     def normalize(self, data, metadata):
+        # For some reason we made a bug in obs, it's shape is change from 259 to 260.
+        # So we need to fill it here.
+
+        if self.pad_to_260:
+            data = np.pad(data, ((0, 0), (0, 1)))
+
         mask = metadata.get("mask", np.ones_like(metadata["mean"], dtype=bool))
         if self.normalization_type == "normal":
             return np.where(
@@ -335,9 +377,6 @@ class UnnormalizeActionProprio(gym.ActionWrapper, gym.ObservationWrapper):
             raise ValueError(
                 f"Unknown action/proprio normalization type: {self.normalization_type}"
             )
-
-    def action(self, action):
-        return self.unnormalize(action, self.action_proprio_metadata["action"])
 
     def observation(self, obs):
         obs[self.key] = self.normalize(obs[self.key], self.action_proprio_metadata[self.key])

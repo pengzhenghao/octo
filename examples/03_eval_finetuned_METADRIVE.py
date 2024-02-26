@@ -16,7 +16,7 @@ To run this script, run:
     python3 03_eval_finetuned.py --filetuned_path=<path_to_finetuned_aloha_checkpoint>
 """
 import sys
-
+import pathlib
 import tqdm
 from absl import app, flags, logging
 import gym
@@ -29,7 +29,7 @@ import wandb
 # from envs.aloha_sim_env import AlohaGymEnv  # keep this to register ALOHA sim env
 
 from octo.model.octo_model import OctoModel
-from octo.utils.gym_wrappers import HistoryWrapper, RHCWrapper, UnnormalizeActionProprio, ResizeImageWrapper
+from octo.utils.gym_wrappers import HistoryWrapper, RHCWrapper, UnnormalizeActionProprioAction, UnnormalizeActionProprio, ResizeImageWrapper
 from gym import ObservationWrapper
 
 FLAGS = flags.FLAGS
@@ -44,11 +44,24 @@ flags.DEFINE_bool(
     "Whether wandb",
 )
 
-flags.DEFINE_string(
-    "exp_name",
-    "eval_metadrive",
-    "name",
+flags.DEFINE_integer(
+    "step",
+    None,
+    "Step",
 )
+
+
+flags.DEFINE_integer(
+    "num_rollouts",
+    20,
+    "Number of rollouts to run.",
+)
+
+# flags.DEFINE_string(
+#     "exp_name",
+#     "eval_metadrive",
+#     "name",
+# )
 
 class MetaDriveObsWrapper(ObservationWrapper):
     observation_space = gym.spaces.Dict(
@@ -56,6 +69,7 @@ class MetaDriveObsWrapper(ObservationWrapper):
          "state": gym.spaces.Box(shape=(259,), dtype=np.float32, low=float("-inf"), high=float("+inf"))
          }
     )
+
     def observation(self, observation):
         cam = self.env.engine.get_sensor("rgb_camera")
         image = cam.perceive(to_float=False)
@@ -79,14 +93,24 @@ def main(_):
     #
     # config.update('jax_disable_jit', True)
 
-
+    num_rollouts = FLAGS.num_rollouts
 
     import tensorflow as tf
     tf.config.experimental.set_visible_devices([], "GPU")
 
     # setup wandb for logging
-    exp_name = FLAGS.exp_name
-    wandb.init(name=exp_name, project="octo")
+
+    finetuned_path = pathlib.Path(FLAGS.finetuned_path)
+    wandb_id = finetuned_path.name
+    # exp_name = FLAGS.exp_name
+    exp_name = "eval_metadrive"
+
+    print(f"{wandb_id=}, {exp_name=}")
+    wandb.init(
+        name=exp_name,
+        id=wandb_id,
+        project="octo"
+    )
 
 
     # make gym environment
@@ -123,6 +147,8 @@ def main(_):
         norm_pixel=False,
         sensors=dict(rgb_camera=(RGBCamera, 512, 256)),
         # render_pipeline=True
+
+        start_seed=1000,
     )
 
 
@@ -148,19 +174,21 @@ def main(_):
     # load finetuned model
     logging.info("Loading finetuned model...")
 
-    finetuned_path = FLAGS.finetuned_path
-    model = OctoModel.load_pretrained(finetuned_path)
+    model = OctoModel.load_pretrained(finetuned_path, step=FLAGS.step)
 
 
     # wrap env to handle action/proprio normalization -- match normalization type to the one used during finetuning
+    env = UnnormalizeActionProprioAction(
+        env, model.dataset_statistics, normalization_type="normal", pad_to_260=True
+    )
     env = UnnormalizeActionProprio(
-        env, model.dataset_statistics, normalization_type="normal"
+        env, model.dataset_statistics, normalization_type="normal", pad_to_260=True
     )
 
     # images_list = []
 
     # running rollouts
-    for _ in range(20):
+    for ep_count in range(num_rollouts):
         obs, info = env.reset()
 
         # create task specification --> use model utility to create task dict with correct entries
@@ -176,7 +204,7 @@ def main(_):
 
         # while len(images) < 100:
         horizon = 1000
-        for _ in tqdm.trange(horizon,):
+        for step_count in tqdm.trange(horizon,):
 
             # model returns actions of shape [batch, pred_horizon, action_dim] -- remove batch
             actions = model.sample_actions(
@@ -199,7 +227,8 @@ def main(_):
         print(f"Success: {info['arrive_dest'][-1]}")
 
         wandb.log(
-            {"rollout_video": wandb.Video(np.array(images).transpose(0, 3, 1, 2)[::2])}, fps=20
+            {"rollout_video": wandb.Video(np.array(images).transpose(0, 3, 1, 2), fps=20)},
+            step=FLAGS.step + ep_count
         )
 
 if __name__ == "__main__":
