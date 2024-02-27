@@ -104,12 +104,14 @@ def main(_):
     wandb_id = finetuned_path.name
     # exp_name = FLAGS.exp_name
     exp_name = "eval_metadrive"
+    wandb_id = f"{exp_name}_{wandb_id}_step{FLAGS.step}"
 
     print(f"{wandb_id=}, {exp_name=}")
     wandb.init(
         name=exp_name,
         id=wandb_id,
-        project="octo"
+        project="octo",
+        resume="allow",
     )
 
 
@@ -186,6 +188,8 @@ def main(_):
     )
 
     # images_list = []
+    succ_list = []
+    ep_reward_list = []
 
     # running rollouts
     for ep_count in range(num_rollouts):
@@ -201,6 +205,7 @@ def main(_):
 
         episode_return = 0.0
 
+        action_list = []
 
         # while len(images) < 100:
         horizon = 1000
@@ -216,6 +221,8 @@ def main(_):
             # obs only contains observation for final step of chunk
             obs, reward, done, trunc, info = env.step(actions)
 
+            action_list.append(actions)
+
             # PZH
             images.extend([o for o in obs["image_primary"]])
             # images.extend([o["image_primary"][0] for o in info["observations"]])
@@ -226,10 +233,21 @@ def main(_):
         print(f"Episode return: {episode_return}")
         print(f"Success: {info['arrive_dest'][-1]}")
 
+        ep_reward_list.append(episode_return)
+        succ_list.append(info['arrive_dest'][-1])
+
         wandb.log(
-            {"rollout_video": wandb.Video(np.array(images).transpose(0, 3, 1, 2), fps=20)},
+            {"rollout_video": wandb.Video(np.array(images).transpose(0, 3, 1, 2),
+                                          caption=f"Succ:{info['arrive_dest'][-1]},Rew{episode_return:.1f}", fps=20),
+             "actions_0": wandb.Histogram(np.array(action_list)[..., 0].flatten()),
+             "actions_1": wandb.Histogram(np.array(action_list)[..., 1].flatten()),
+             "episode_return": episode_return,
+             "success": info['arrive_dest'][-1],
+             },
             step=FLAGS.step + ep_count
         )
+    wandb.log({"avg_episode_return": np.mean(ep_reward_list), "avg_success": np.mean(succ_list)}, step=FLAGS.step + ep_count)
+    print(f"Episode return: {np.mean(ep_reward_list)}, Success: {np.mean(succ_list)}")
 
 if __name__ == "__main__":
     app.run(main)
