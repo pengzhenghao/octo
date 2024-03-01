@@ -75,8 +75,8 @@ def get_config(config_string="full,language_conditioned"):
 
         num_steps=max_steps,
         log_interval=100,
-        eval_interval=5000,
-        save_interval=5000,
+        eval_interval=10000,
+        save_interval=10000,
         save_dir="/bigdata/zhenghao/octo/",
         seed=42,
         wandb=dict(

@@ -46,37 +46,6 @@ except ImportError:
 
 FLAGS = flags.FLAGS
 
-# flags.DEFINE_string(
-#     "pretrained_path", "hf://rail-berkeley/octo-small", "Path to pre-trained Octo checkpoint directory."
-# )
-# flags.DEFINE_string("data_dir", "metadrive_dataset", "Path to finetuning dataset, in RLDS format.")
-# flags.DEFINE_string("save_dir", "/home/zhenghao/octo/models/", "Directory for saving finetuning checkpoints.")
-# flags.DEFINE_integer("batch_size", 3, "Batch size for finetuning.")
-# flags.DEFINE_integer("total_steps", 5000, "total steps.", short_name="total_step")
-
-# flags.DEFINE_bool(
-#     "freeze_transformer",
-#     False,
-#     "Whether pre-trained transformer weights should be frozen.",
-# )
-
-# flags.DEFINE_bool(
-#     "wandb",
-#     False,
-#     "Whether wandb",
-# )
-#
-# flags.DEFINE_string(
-#     "exp_name",
-#     "finetune_metadrive",
-#     "name",
-# )
-# flags.DEFINE_string(
-#     "split_suffix",
-#     None,
-#     "suffix to the split. Default: None. Could be: [:5%]",
-# )
-
 flags.DEFINE_string("name", "finetune_metadrive", "Experiment name.")
 flags.DEFINE_bool("debug", False, "Debug config (no wandb logging)")
 
@@ -94,53 +63,6 @@ REPO_ROOT = pathlib.Path(__file__).parent.parent.resolve()
 
 
 def main(_):
-    # import octo-small
-    # os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-    # os.environ["XLA_FLAGS"] = "--xla_gpu_strict_conv_algorithm_picker=false --xla_gpu_force_compilation_parallelism=1"
-
-    # # PZH
-    # # Verify if GPU can be used.
-    # print("DEVICES: ", jax.devices("gpu"))
-    #
-    # assert (
-    #     FLAGS.batch_size % jax.device_count() == 0
-    # ), "Batch size must be divisible by device count."
-    #
-    # initialize_compilation_cache()
-    # # prevent tensorflow from using GPU memory since it's only used for data loading
-    # tf.config.set_visible_devices([], "GPU")
-    #
-    # # setup wandb for logging
-    # if not FLAGS.wandb:
-    #     import os
-    #     os.environ["WANDB_MODE"] = "offline"
-    #
-    # wandb.init(name="finetune_metadrive", project="octo")
-    #
-    # # wandb.init(
-    # #     config=FLAGS.config.to_dict(),
-    # #     id=wandb_id,
-    # #     name=exp_name,
-    # #     mode="disabled" if FLAGS.debug else None,
-    # #     **FLAGS.config.wandb,
-    # # )
-    #
-    #
-    #
-    # # PZH
-    # ACTION_DIM = 2
-    #
-    # # dataset_name = args.dataset_name
-    #
-    # data_dir = "metadrive_dataset" #/ "metadrive_dataset" / "1.0.0"
-    # module = importlib.import_module(data_dir)
-    # print(f"{module} is loaded.")
-    #
-    # data_dir = pathlib.Path("/home/zhenghao/octo") / "metadrive_dataset"
-    #
-    # save_dir = REPO_ROOT / FLAGS.save_dir
-    #
-    #
 
     initialize_compilation_cache()
     devices = jax.devices()
@@ -269,6 +191,10 @@ def main(_):
 
     def process_batch(batch):
         batch = process_text(batch, text_processor)
+
+        # TODO: hardcoded here to remove "lidar".
+        batch['observation']['proprio'] = batch['observation']['proprio'][..., :19]
+
         del batch["dataset_name"]
         return batch
 
