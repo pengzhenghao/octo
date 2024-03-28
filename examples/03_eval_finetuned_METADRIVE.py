@@ -66,7 +66,10 @@ flags.DEFINE_integer(
 class MetaDriveObsWrapper(ObservationWrapper):
     observation_space = gym.spaces.Dict(
         {"image_primary": gym.spaces.Box(shape=(256, 512, 3), dtype=np.uint8, low=0, high=255),
-         "state": gym.spaces.Box(shape=(259,), dtype=np.float32, low=float("-inf"), high=float("+inf"))
+
+         # "state": gym.spaces.Box(shape=(259,), dtype=np.float32, low=float("-inf"), high=float("+inf"))
+         "state": gym.spaces.Box(shape=(19,), dtype=np.float32, low=float("-inf"), high=float("+inf"))
+
          }
     )
 
@@ -74,6 +77,11 @@ class MetaDriveObsWrapper(ObservationWrapper):
         cam = self.env.engine.get_sensor("rgb_camera")
         image = cam.perceive(to_float=False)
         image = image[..., [2, 1, 0]]
+
+
+        # TODO: hardcoded here to remove "lidar".
+        observation = observation[..., :19]
+
         return {"image_primary": image, "proprio":  observation}
 
 
@@ -101,15 +109,17 @@ def main(_):
     # setup wandb for logging
 
     finetuned_path = pathlib.Path(FLAGS.finetuned_path)
-    wandb_id = finetuned_path.name
+    # wandb_id = finetuned_path.name
     # exp_name = FLAGS.exp_name
-    exp_name = "eval_metadrive"
-    wandb_id = f"{exp_name}_{wandb_id}_step{FLAGS.step}"
+    exp_name = finetuned_path.name
+    group = f"{exp_name}_EVAL"
+    wandb_id = f"{exp_name}_EVAL_step{FLAGS.step}"
 
-    print(f"{wandb_id=}, {exp_name=}")
+    print(f"{wandb_id=}, {group=}, {exp_name=}")
     wandb.init(
         name=exp_name,
         id=wandb_id,
+        group=group,
         project="octo",
         resume="allow",
     )
@@ -181,10 +191,7 @@ def main(_):
 
     # wrap env to handle action/proprio normalization -- match normalization type to the one used during finetuning
     env = UnnormalizeActionProprioAction(
-        env, model.dataset_statistics, normalization_type="normal", pad_to_260=True
-    )
-    env = UnnormalizeActionProprio(
-        env, model.dataset_statistics, normalization_type="normal", pad_to_260=True
+        env, model.dataset_statistics, normalization_type="normal", pad_to_260=False
     )
 
     # images_list = []

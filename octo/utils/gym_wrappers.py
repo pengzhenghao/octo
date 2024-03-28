@@ -353,6 +353,13 @@ class UnnormalizeActionProprio(gym.ObservationWrapper):
         if self.pad_to_260:
             data = np.pad(data, ((0, 0), (0, 1)))
 
+
+        # TODO: hardcoded here to remove "lidar".
+        metadata["mean"] = metadata["mean"][:19]
+        metadata["min"] = metadata["min"][:19]
+        metadata["max"] = metadata["max"][:19]
+        metadata["std"] = metadata["std"][:19]
+
         mask = metadata.get("mask", np.ones_like(metadata["mean"], dtype=bool))
         if self.normalization_type == "normal":
             return np.where(
