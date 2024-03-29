@@ -1,7 +1,7 @@
 from ml_collections import ConfigDict
 from ml_collections.config_dict import FieldReference, placeholder
 
-
+# head_only,multimodal
 def get_config(config_string="full,multimodal"):
     mode, task = config_string.split(",")
     assert task in ["image_conditioned", "language_conditioned", "multimodal"]

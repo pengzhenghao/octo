@@ -16,7 +16,7 @@ from ml_collections import config_flags, ConfigDict
 
 import wandb
 from octo.data.dataset import make_single_dataset
-from octo.model.components.action_heads import DiffusionActionHead
+from octo.model.components.action_heads import DiffusionActionHead, MSEActionHead
 from octo.model.components.tokenizers import LowdimObsTokenizer
 from octo.model.octo_model import OctoModel
 from octo.utils.jax_utils import initialize_compilation_cache
@@ -167,7 +167,8 @@ def main(_):
     )
     # Fully override the old action head with a new one (for smaller changes, you can use update_module_config)
     config["model"]["heads"]["action"] = ModuleSpec.create(
-        DiffusionActionHead,
+        # DiffusionActionHead,
+        MSEActionHead,
         pred_horizon=5,
         # PZH
         action_dim=2,
