@@ -112,12 +112,22 @@ if __name__ == '__main__':
             # plt.show()
 
             new_observations, rewards, dones, infos = env.step(actions)
+
+            if infos["navigation_forward"]:
+                language_instruction = "Move forward"
+            elif infos["navigation_left"]:
+                language_instruction = "Turn left"
+            elif infos["navigation_right"]:
+                language_instruction = "Turn right"
+            else:
+                raise ValueError("Something wrong in the navigation command: {}".format(infos["navigation_command"]))
+
             episode.append({
                 'image': np.asarray(image, dtype=np.uint8),
                 # 'wrist_image': np.asarray(np.random.rand(64, 64, 3) * 255, dtype=np.uint8),
                 'state': observations,
                 'action': actions,
-                'language_instruction': 'navigate to the destination following the intermediate checkpoints.',
+                'language_instruction': language_instruction,
             })
             observations = new_observations
 
