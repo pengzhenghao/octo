@@ -162,7 +162,7 @@ Can also check `rlds_dataset_builder/README.md`
 2. rename `DATASETNAME/metadrive_dataset_builder.py` to `DATASETNAME/DATASETNAME.py`
 3. Rename class name in the builder .py file.
 4. cd `DATASETNAME`
-5. `CUDA_VISIBLE_DEVICES="" tfds build --overwrite --beam_pipeline_options="direct_running_mode=multi_processing,direct_num_workers=10"`
+5. `CUDA_VISIBLE_DEVICES="" tfds build --overwrite --data_dir="." --beam_pipeline_options="direct_running_mode=multi_processing,direct_num_workers=10"`
 
 ## FAQ
 #### What is the `pad_mask` in the observation dictionary?
