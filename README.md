@@ -152,6 +152,18 @@ To evaluate on your own environment, simply wrap it in a Gym interface and follo
 | Model Architecture  | [octo_module.py](octo/model/octo_module.py)             | Combines token sequencing, transformer backbone and readout heads.            |
 | Visualization       | [visualization_lib.py](octo/utils/visualization_lib.py) | Utilities for offline qualitative & quantitative eval.                        |
 
+
+
+## PZH: How to make dataset?
+
+Can also check `rlds_dataset_builder/README.md`
+
+1. run `DATASETNAME/make_metarive_dataset.py`
+2. rename `DATASETNAME/metadrive_dataset_builder.py` to `DATASETNAME/DATASETNAME.py`
+3. Rename class name in the builder .py file.
+4. cd `DATASETNAME`
+5. `CUDA_VISIBLE_DEVICES="" tfds build --overwrite --beam_pipeline_options="direct_running_mode=multi_processing,direct_num_workers=10"`
+
 ## FAQ
 #### What is the `pad_mask` in the observation dictionary?
 The `pad_mask` indicates which observations should be attended to, which is important when using multiple timesteps of observation history. Octo was trained with a history window size of 2, meaning the model can predict an action using both the current observation and the previous observation. However, at the very beginning of the trajectory, there is no previous observation, so we need to set `pad_mask=False` at the corresponding index. If you use Octo with a window size of 1, pad_mask should always just be `[True]`, indicating that the one and only observation in the window should be attended to. Note that if you wrap your robot environment with the `HistoryWrapper` (see [gym_wrappers.py](octo/utils/gym_wrappers.py)), the `pad_mask` key will be added to the observation dictionary for you.
