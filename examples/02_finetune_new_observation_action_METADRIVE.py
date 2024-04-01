@@ -209,9 +209,15 @@ def main(_):
         del FLAGS.config["dataset_kwargs"]["standardize_fn"]
         FLAGS.config["dataset_kwargs"]["standardize_fn"] = standardize_fn
 
+    # PZH NOTE: At each step, previous 4 frames will be added into history.
+    # Current step's language instruction will be used.
+
+    traj_transform_kwargs = FLAGS.config.traj_transform_kwargs
+    # traj_transform_kwargs["num_parallel_calls"] = 1
+
     dataset = make_single_dataset(
         FLAGS.config.dataset_kwargs,
-        traj_transform_kwargs=FLAGS.config.traj_transform_kwargs,
+        traj_transform_kwargs=traj_transform_kwargs,
         frame_transform_kwargs=FLAGS.config.frame_transform_kwargs,
         train=True,
     )

@@ -1,20 +1,3 @@
-"""
-This script demonstrates how to load and rollout a finetuned Octo model.
-We use the Octo model finetuned on ALOHA sim data from the examples/finetune_new_observation_action.py script.
-
-For installing the ALOHA sim environment, clone: https://github.com/tonyzhaozh/act
-Then run:
-pip3 install opencv-python modern_robotics pyrealsense2 h5py_cache pyquaternion pyyaml rospkg pexpect mujoco==2.3.3 dm_control==1.0.9 einops packaging h5py
-
-Finally, modify the `sys.path.append` statement below to add the ACT repo to your path.
-If you are running this on a head-less server, start a virtual display:
-    Xvfb :1 -screen 0 1024x768x16 &
-    export DISPLAY=:1
-
-To run this script, run:
-    cd examples
-    python3 03_eval_finetuned.py --filetuned_path=<path_to_finetuned_aloha_checkpoint>
-"""
 import sys
 import pathlib
 import tqdm
@@ -116,13 +99,6 @@ def main(_):
     wandb_id = f"{exp_name}_EVAL_step{FLAGS.step}"
 
     print(f"{wandb_id=}, {group=}, {exp_name=}")
-    wandb.init(
-        name=exp_name,
-        id=wandb_id,
-        group=group,
-        project="octo",
-        resume="allow",
-    )
 
 
     # make gym environment
@@ -186,13 +162,7 @@ def main(_):
     # load finetuned model
     logging.info("Loading finetuned model...")
 
-    model = OctoModel.load_pretrained(finetuned_path, step=FLAGS.step)
 
-
-    # wrap env to handle action/proprio normalization -- match normalization type to the one used during finetuning
-    env = UnnormalizeActionProprioAction(
-        env, model.dataset_statistics, normalization_type="normal", pad_to_260=False
-    )
 
     # images_list = []
     succ_list = []
@@ -232,15 +202,14 @@ def main(_):
             print("Instruction: ", language_instruction, info['navigation_command'])
 
             # create task specification --> use model utility to create task dict with correct entries
-            task = model.create_tasks(texts=[language_instruction])
 
             # model returns actions of shape [batch, pred_horizon, action_dim] -- remove batch
-            actions = model.sample_actions(
-                jax.tree_map(lambda x: x[None], obs), task, rng=jax.random.PRNGKey(0)
-            )
+            # actions = model.sample_actions(
+            #     jax.tree_map(lambda x: x[None], obs), task, rng=jax.random.PRNGKey(0)
+            # )
 
             # PZH: Debug:
-            # actions = np.array([[[0, 1]] * 5])
+            actions = np.array([[[0, 1]] * 5])
 
             actions = actions[0]
 
@@ -263,18 +232,18 @@ def main(_):
         ep_reward_list.append(episode_return)
         succ_list.append(info['arrive_dest'][-1])
 
-        wandb.log(
-            {"rollout_video": wandb.Video(np.array(images).transpose(0, 3, 1, 2),
-                                          caption=f"Succ:{info['arrive_dest'][-1]},Rew{episode_return:.1f}", fps=20),
-             "actions_0": wandb.Histogram(np.array(action_list)[..., 0].flatten()),
-             "actions_1": wandb.Histogram(np.array(action_list)[..., 1].flatten()),
-             "episode_return": episode_return,
-             "success": info['arrive_dest'][-1],
-             },
-            step=FLAGS.step + ep_count
-        )
-    wandb.log({"avg_episode_return": np.mean(ep_reward_list), "avg_success": np.mean(succ_list)}, step=FLAGS.step + ep_count)
-    print(f"Episode return: {np.mean(ep_reward_list)}, Success: {np.mean(succ_list)}")
+    #     wandb.log(
+    #         {"rollout_video": wandb.Video(np.array(images).transpose(0, 3, 1, 2),
+    #                                       caption=f"Succ:{info['arrive_dest'][-1]},Rew{episode_return:.1f}", fps=20),
+    #          "actions_0": wandb.Histogram(np.array(action_list)[..., 0].flatten()),
+    #          "actions_1": wandb.Histogram(np.array(action_list)[..., 1].flatten()),
+    #          "episode_return": episode_return,
+    #          "success": info['arrive_dest'][-1],
+    #          },
+    #         step=FLAGS.step + ep_count
+    #     )
+    # wandb.log({"avg_episode_return": np.mean(ep_reward_list), "avg_success": np.mean(succ_list)}, step=FLAGS.step + ep_count)
+    # print(f"Episode return: {np.mean(ep_reward_list)}, Success: {np.mean(succ_list)}")
 
 if __name__ == "__main__":
     app.run(main)
