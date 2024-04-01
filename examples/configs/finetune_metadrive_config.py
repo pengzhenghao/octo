@@ -17,7 +17,7 @@ def get_config(config_string="full,language_conditioned"):
 
 
         # PZH
-        "name": "metadrive_dataset",
+        "name": "metadrive_dataset_new",
         "data_dir": "/data/zhenghao/octo/metadrive_dataset_new",
         "split_suffix": "",
 
