@@ -49,6 +49,12 @@ For GPU:
 ```bash
 pip install --upgrade "jax[cuda11_pip]==0.4.20" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 
+# PZH:
+conda install -c conda-forge cudnn
+pip install --upgrade "jax[cuda11_pip]==0.4.20" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+
+
+
 # PZH: Test jax:
 python -c "import jax;print(jax.devices('gpu'))"
 ```
