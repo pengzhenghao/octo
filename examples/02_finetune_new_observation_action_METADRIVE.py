@@ -132,7 +132,6 @@ def main(_):
     # Load Pretrained model + optionally modify config
     #
     #########
-
     pretrained_model = OctoModel.load_pretrained(
         FLAGS.config.pretrained_path,
         step=FLAGS.config.pretrained_step,
@@ -247,8 +246,11 @@ def main(_):
         rng=init_rng,
         dataset_statistics=dataset.dataset_statistics,
     )
-    merged_params = merge_params(model.params, pretrained_model.params)
-    model = model.replace(params=merged_params)
+
+    if FLAGS.config.load_pretrained_weights:
+        merged_params = merge_params(model.params, pretrained_model.params)
+        model = model.replace(params=merged_params)
+
     del pretrained_model
 
     #########

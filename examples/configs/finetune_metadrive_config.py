@@ -66,7 +66,7 @@ def get_config(config_string="full,language_conditioned"):
     config = dict(
         pretrained_path="hf://rail-berkeley/octo-small",
         pretrained_step=placeholder(int),
-
+        load_pretrained_weights=True,
 
         # batch_size=256,
         # shuffle_buffer_size=10000,
