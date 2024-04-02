@@ -355,10 +355,15 @@ class UnnormalizeActionProprio(gym.ObservationWrapper):
 
 
         # TODO: hardcoded here to remove "lidar".
+        # TODO: Change this to :9
         metadata["mean"] = metadata["mean"][:19]
         metadata["min"] = metadata["min"][:19]
         metadata["max"] = metadata["max"][:19]
         metadata["std"] = metadata["std"][:19]
+        # metadata["mean"] = metadata["mean"][:9]
+        # metadata["min"] = metadata["min"][:9]
+        # metadata["max"] = metadata["max"][:9]
+        # metadata["std"] = metadata["std"][:9]
 
         mask = metadata.get("mask", np.ones_like(metadata["mean"], dtype=bool))
         if self.normalization_type == "normal":

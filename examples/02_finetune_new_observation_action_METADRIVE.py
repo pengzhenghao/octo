@@ -194,7 +194,8 @@ def main(_):
         batch = process_text(batch, text_processor)
 
         # TODO: hardcoded here to remove "lidar".
-        batch['observation']['proprio'] = batch['observation']['proprio'][..., :19]
+        # batch['observation']['proprio'] = batch['observation']['proprio'][..., :19]
+        batch['observation']['proprio'] = batch['observation']['proprio'][..., :9]
 
         del batch["dataset_name"]
         return batch

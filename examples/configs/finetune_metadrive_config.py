@@ -70,7 +70,8 @@ def get_config(config_string="full,language_conditioned"):
 
         # batch_size=256,
         # shuffle_buffer_size=10000,
-        batch_size=24,
+        batch_size=24,  # For 24GB GPU
+
         shuffle_buffer_size=10_000,
 
         num_steps=max_steps,
